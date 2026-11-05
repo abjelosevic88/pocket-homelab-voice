@@ -94,6 +94,24 @@ func (s *Server) speechModel(ctx context.Context) speech.Model {
 	return m
 }
 
+// dictationModel is the model dictation from other apps is written out with (Parakeet unless an admin chose another).
+func (s *Server) dictationModel(ctx context.Context) speech.Model {
+	box, _ := s.store.GetSettings(ctx, 0)
+	if m, ok := speech.ModelByID(box.DictationModel); ok && box.DictationModel != "" {
+		return m
+	}
+	m, _ := speech.ModelByID(speech.ParakeetModel)
+	return m
+}
+
+// noEngine is why this box can't run a model by itself.
+func noEngine(m speech.Model) error {
+	if m.Engine == "parakeet" {
+		return errors.New("this server cannot run Parakeet (parakeet-cli is not installed here; the Docker image has it on Intel/AMD and ARM64). Pick a Whisper model under Settings → Writing out")
+	}
+	return errNoWhisper
+}
+
 func (s *Server) audioDir(uid int64) string {
 	return filepath.Join(s.cfg.AudioDir, strconv.FormatInt(uid, 10))
 }
@@ -230,8 +248,9 @@ func (s *Server) writeOut(ctx context.Context, m *store.Memo, st store.Settings)
 		key := st.OpenAIKey
 		return speech.NewRemote(st.OpenAIBaseURL, key, st.SpeechAPI).Transcribe(ctx, path, lang, prompt)
 	}
-	if !s.speech.HasWhisper() {
-		return nil, errNoWhisper
+	model := s.speechModel(ctx)
+	if !s.speech.HasEngine(model) {
+		return nil, noEngine(model)
 	}
 	if !hasWAV {
 		if !strings.HasSuffix(strings.ToLower(path), ".wav") {
@@ -239,7 +258,6 @@ func (s *Server) writeOut(ctx context.Context, m *store.Memo, st store.Settings)
 		}
 		wav = path
 	}
-	model := s.speechModel(ctx)
 	if !s.speech.ModelReady(model) {
 		if err := s.fetchModel(ctx, m.ID, model); err != nil {
 			return nil, err

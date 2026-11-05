@@ -61,6 +61,7 @@ type Config struct {
 	// Writing out on this machine: whisper.cpp and ffmpeg (both in the
 	// Docker image), the models under ModelsDir, recordings under AudioDir.
 	WhisperBin     string
+	ParakeetBin    string
 	FFmpegBin      string
 	WhisperModel   string // the box default until an admin picks one in Settings
 	WhisperThreads int
@@ -167,6 +168,7 @@ func Load() (*Config, error) {
 		NotifyHour: envInt("NOTIFY_HOUR", 8),
 
 		WhisperBin:     env("WHISPER_BIN", "whisper-cli"),
+		ParakeetBin:    env("PARAKEET_BIN", "parakeet-cli"),
 		FFmpegBin:      env("FFMPEG_BIN", "ffmpeg"),
 		WhisperModel:   env("WHISPER_MODEL", ""),
 		WhisperThreads: envInt("WHISPER_THREADS", 0),

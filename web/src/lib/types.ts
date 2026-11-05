@@ -11,7 +11,7 @@ export type Settings = ConnFields & {
   core_configured: boolean
   core_registered?: boolean
   title: string; date_format: string; time_format: string; week_start: number; currency: string
-  speech_model: string; engine: 'local' | 'api'; language: string; vocabulary: string; latin: boolean; speech_api_model: string
+  speech_model: string; dictation_model: string; engine: 'local' | 'api'; language: string; vocabulary: string; latin: boolean; speech_api_model: string
   keep_audio_days: number; playback_speed: string
   ai_tidy: boolean; file_on_send: boolean
   notes_folder: string; notes_listen: boolean; tasks_list_id: number; calendar_id: number; money_account_id: number; money_category_id: number
@@ -48,9 +48,9 @@ export interface Memo {
 export interface Counts { all: number; inbox: number; starred: number; working: number; failed: number; minutes: number }
 export interface MemoPage { items: Memo[]; total: number; counts: Counts }
 
-export interface SpeechModel { id: string; name: string; file: string; bytes: number; note: string; ready: boolean; current: boolean; download?: { got: number; total: number; error: string; done: boolean } }
+export interface SpeechModel { id: string; name: string; engine: 'whisper' | 'parakeet'; file: string; bytes: number; note: string; ready: boolean; current: boolean; dictation: boolean; runs: boolean; download?: { got: number; total: number; error: string; done: boolean } }
 export interface Speech {
-  engine: 'local' | 'api'; ready: boolean; detail: string; whisper: boolean; ffmpeg: boolean; model: string; models: SpeechModel[]; threads: number
+  engine: 'local' | 'api'; ready: boolean; detail: string; whisper: boolean; ffmpeg: boolean; model: string; dictation_model: string; models: SpeechModel[]; threads: number
   languages: { code: string; name: string }[]; api_model: string; demo: boolean
 }
 

@@ -149,6 +149,8 @@ type Settings struct {
 	// The whisper.cpp model this box writes with (admins choose; box-wide,
 	// the models are big).
 	SpeechModel string `json:"speech_model"`
+	// The model dictation from other apps is written out with (POST /transcribe): speed matters there.
+	DictationModel string `json:"dictation_model"`
 
 	DateFormat string `json:"date_format"`
 	TimeFormat string `json:"time_format"`

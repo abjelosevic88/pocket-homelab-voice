@@ -39,7 +39,7 @@ func (s *Server) publicSettings(ctx context.Context, u *store.User, st store.Set
 	out := map[string]any{
 		"core_configured": s.core.Configured(), "core_registered": s.coreStatus()["registered"],
 		"title": st.Title, "date_format": st.DateFormat, "time_format": st.TimeFormat, "week_start": st.WeekStart, "currency": st.Currency,
-		"speech_model": s.speechModel(ctx).ID, "engine": firstNonEmpty(st.Engine, "local"), "language": st.Language, "vocabulary": st.Vocabulary, "latin": st.Latin,
+		"speech_model": s.speechModel(ctx).ID, "dictation_model": s.dictationModel(ctx).ID, "engine": firstNonEmpty(st.Engine, "local"), "language": st.Language, "vocabulary": st.Vocabulary, "latin": st.Latin,
 		"speech_api_model": st.SpeechAPI, "keep_audio_days": st.KeepAudio, "playback_speed": firstNonEmpty(st.PlaybackSpd, "1"),
 		"ai_tidy": st.AITidy, "file_on_send": st.FileOnSend,
 		"notes_folder": st.NotesFolder, "notes_listen": st.NotesListen, "tasks_list_id": st.TasksListID, "calendar_id": st.CalendarID,
@@ -148,6 +148,17 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	if keys["playback_speed"] && oneOf(in.PlaybackSpd, []string{"1", "1.25", "1.5", "1.75", "2"}) {
 		cur.PlaybackSpd = in.PlaybackSpd
 	}
+	if keys["dictation_model"] && isAdmin {
+		m, ok := speech.ModelByID(in.DictationModel)
+		if !ok || in.DictationModel == "" {
+			bad("unknown speech model")
+			return
+		}
+		cur.DictationModel = in.DictationModel
+		if !s.cfg.DemoData && !s.speech.ModelReady(m) {
+			s.speech.StartFetch(m)
+		}
+	}
 	if keys["speech_model"] && isAdmin {
 		if _, ok := speech.ModelByID(in.SpeechModel); !ok || in.SpeechModel == "" {
 			bad("unknown speech model")
@@ -245,7 +256,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "save settings")
 		return
 	}
-	if isAdmin && (keys["title"] || keys["speech_model"]) {
+	if isAdmin && (keys["title"] || keys["speech_model"] || keys["dictation_model"]) {
 		if err := s.store.SaveBoxSettings(r.Context(), cur); err != nil {
 			s.fail(w, err, "save settings")
 			return

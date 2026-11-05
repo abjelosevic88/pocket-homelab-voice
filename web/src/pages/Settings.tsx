@@ -166,19 +166,27 @@ function SpeechTab() {
         {sp.detail && (f.engine === 'api' || sp.whisper) && <p className={`small ${sp.ready ? 'muted' : 'warn-text'}`}>{sp.detail[0].toUpperCase() + sp.detail.slice(1)}.</p>}
         {f.engine === 'api' && <SettingRow title="Model" help="Default gpt-4o-mini-transcribe. whisper-1 also gives timings, so the words follow the playback."><input value={f.speech_api_model} onChange={e => setF({ ...f, speech_api_model: e.target.value })} onBlur={() => save({ speech_api_model: f.speech_api_model })} placeholder={sp.api_model} /></SettingRow>}
       </Section>
-      {f.engine === 'local' && <Section title="Speech model" icon="gauge" sub={<>The model this box writes with, for everyone. Bigger writes better, smaller writes faster. It runs on {sp.threads} {sp.threads === 1 ? 'core' : 'cores'}; Best takes about as long as the recording on a small server.{!isAdmin && ' Admins choose it.'}</>}>
+      {f.engine === 'local' && <Section title="Speech models" icon="gauge" sub={<>The models this box writes with, for everyone: one for memos, one for dictation in other apps (Pocket Day, Pocket AI, the Mac launcher), where speed matters most. They run on {sp.threads} {sp.threads === 1 ? 'core' : 'cores'}.{!isAdmin && ' Admins choose them.'}</>}>
         {!sp.whisper && <div className="callout warn"><Icon name="alert" size={15} /><span>whisper.cpp is not installed here. The Docker image has it for Intel/AMD and ARM64 machines; elsewhere choose “OpenAI or a speech server” above.</span></div>}
+        <SettingRow title="Memos are written out with" help="A new choice is downloaded right away; memos wait for it.">
+          <Select ariaLabel="Model for memos" value={sp.model} disabled={!isAdmin} onChange={v => save({ speech_model: v }).then(reload)}
+            options={sp.models.map(m => ({ value: m.id, label: `${m.name} · ${m.engine === 'parakeet' ? 'Parakeet' : 'Whisper'}`, disabled: !m.runs }))} />
+        </SettingRow>
+        <SettingRow title="Dictation is written out with" help="What other apps send to be written out (nothing is kept).">
+          <Select ariaLabel="Model for dictation" value={sp.dictation_model} disabled={!isAdmin} onChange={v => save({ dictation_model: v }).then(reload)}
+            options={sp.models.map(m => ({ value: m.id, label: `${m.name} · ${m.engine === 'parakeet' ? 'Parakeet' : 'Whisper'}`, disabled: !m.runs }))} />
+        </SettingRow>
         <div className="model-list">{sp.models.map(m => (
-          <div key={m.id} className={`model-row ${m.current ? 'cur' : ''}`}>
-            <button type="button" className="model-pick" disabled={!isAdmin || m.current} onClick={() => save({ speech_model: m.id }).then(reload)} aria-pressed={m.current}>
-              <span className={`radio ${m.current ? 'on' : ''}`} aria-hidden="true" />
-              <span className="grow"><b>{m.name}</b> <span className="muted small">{m.id} · about {Math.round(m.bytes / 1048576)} MB</span><span className="muted small block-line">{m.note}</span></span>
-            </button>
+          <div key={m.id} className={`model-row ${m.current || m.dictation ? 'cur' : ''}`}>
+            <span className="grow model-info"><b>{m.name}</b> <span className="muted small">{m.engine === 'parakeet' ? 'Parakeet' : 'Whisper'} · about {Math.round(m.bytes / 1048576)} MB</span>
+              {m.current && <span className="badge accent">memos</span>}{m.dictation && <span className="badge accent">dictation</span>}
+              <span className="muted small block-line">{m.note}</span></span>
             <span className="model-state small">
-              {m.download && !m.download.done ? <span className="tnum">{m.download.total ? Math.round(m.download.got * 100 / m.download.total) : 0}%</span>
+              {!m.runs ? <span className="muted">not on this server</span>
+                : m.download && !m.download.done ? <span className="tnum">{m.download.total ? Math.round(m.download.got * 100 / m.download.total) : 0}%</span>
                 : m.ready ? <span className="ok">downloaded</span> : m.download?.error ? <span className="bad" title={m.download.error}>failed</span> : <span className="muted">not downloaded</span>}
-              {isAdmin && !m.ready && !(m.download && !m.download.done) && <button type="button" className="btn sm ghost" disabled={sp.demo} onClick={() => fetchModel(m.id)}><Icon name="download" size={14} />Get</button>}
-              {isAdmin && m.ready && !m.current && <button type="button" className="btn sm ghost danger-text" onClick={() => dropModel(m.id)}>Remove</button>}
+              {isAdmin && m.runs && !m.ready && !(m.download && !m.download.done) && <button type="button" className="btn sm ghost" disabled={sp.demo} onClick={() => fetchModel(m.id)}><Icon name="download" size={14} />Get</button>}
+              {isAdmin && m.ready && !m.current && !m.dictation && <button type="button" className="btn sm ghost danger-text" onClick={() => dropModel(m.id)}>Remove</button>}
             </span>
           </div>
         ))}</div>
@@ -189,7 +197,7 @@ function SpeechTab() {
           <Select ariaLabel="Language" value={f.language} onChange={v => save({ language: v })} options={langs} placeholder="Find out by itself" clearLabel="Find out by itself" />
         </SettingRow>
         <SettingRow title="Serbian in Latin letters" help="Whisper writes Serbian in Cyrillic; this turns it into Latin letters (also for Bosnian and Croatian, when it slips)."><Switch checked={f.latin} onChange={v => save({ latin: v })} label="Latin letters" /></SettingRow>
-        <SettingRow title="Names and words to expect" stack help="People, places, products and words you use, separated by commas. They help spell them right.">
+        <SettingRow title="Names and words to expect" stack help="People, places, products and words you use, separated by commas. They help Whisper spell them right (Parakeet doesn't use them).">
           <textarea rows={3} value={f.vocabulary} onChange={e => setF({ ...f, vocabulary: e.target.value })} onBlur={() => save({ vocabulary: f.vocabulary })} placeholder="Amra, Mirza, Kibe Mahala, Jahorina, Pocket Core" />
         </SettingRow>
       </Section>

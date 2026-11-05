@@ -60,13 +60,17 @@ func fakeTools(t *testing.T, words, lang string) func(*config.Config) {
 		map[string]any{"offsets": map[string]any{"from": 2000, "to": 2000}, "text": " [BLANK_AUDIO]"},
 	}})
 	_ = os.WriteFile(filepath.Join(dir, "out.json"), js, 0o644)
+	pk := filepath.Join(dir, "parakeet-cli")
+	_ = os.WriteFile(pk, []byte("#!/bin/sh\necho 'Processing audio'\necho 'Segments (1):'\necho 'Segment 0: [0 -> 200] \""+strings.ReplaceAll(words, "|", " ")+"\"'\n"), 0o755)
 	wh := filepath.Join(dir, "whisper-cli")
 	_ = os.WriteFile(wh, []byte("#!/bin/sh\nwhile [ $# -gt 0 ]; do if [ \"$1\" = -of ]; then of=$2; fi; shift; done\necho 'whisper_print_progress_callback: progress =  50%' >&2\ncp "+filepath.Join(dir, "out.json")+" \"$of.json\"\n"), 0o755)
 	return func(c *config.Config) {
-		c.FFmpegBin, c.WhisperBin = ff, wh
+		c.FFmpegBin, c.WhisperBin, c.ParakeetBin = ff, wh, pk
 		_ = os.MkdirAll(c.ModelsDir, 0o755)
-		m, _ := speech.ModelByID("")
-		_ = os.WriteFile(filepath.Join(c.ModelsDir, m.File), append([]byte("lmgg"), make([]byte, 2<<20)...), 0o644)
+		for _, id := range []string{"", speech.ParakeetModel} {
+			m, _ := speech.ModelByID(id)
+			_ = os.WriteFile(filepath.Join(c.ModelsDir, m.File), append([]byte("lmgg"), make([]byte, 2<<20)...), 0o644)
+		}
 	}
 }
 
@@ -312,6 +316,8 @@ func TestLinkScopes(t *testing.T) {
 		{[]string{"voice:write"}, "DELETE", "/api/v1/memos/3", true},
 		{[]string{"voice:write"}, "POST", "/api/v1/memos/3/send", false},
 		{[]string{"voice:transcribe"}, "POST", "/api/v1/transcribe", true},
+		{[]string{"voice:transcribe"}, "POST", "/api/v1/polish", true},
+		{[]string{"voice:read"}, "POST", "/api/v1/polish", false},
 		{[]string{"voice:transcribe"}, "GET", "/api/v1/memos", false},
 		{[]string{"voice:read", "voice:write"}, "PUT", "/api/v1/settings", false},
 		{nil, "GET", "/api/v1/auth/me", true},
@@ -424,4 +430,44 @@ func TestManifestSlug(t *testing.T) {
 	if !strings.Contains(string(src), `Slug: "voice", Name: "Pocket Voice"`) || strings.Contains(string(src), `Slug: "places"`) {
 		t.Fatal("the Core manifest slug is not voice")
 	}
+}
+
+func TestParseParakeet(t *testing.T) {
+	out := "Processing audio (176000 samples, 11.00 seconds)\nSegments (2):\nSegment 0: [0 -> 520] \"Sutra u 9 sati, nazvati zubara.\"\nTokens [3]:\n  [ 0] id= 1976 frame=  3\nSegment 1: [900 -> 1101] \"Kupi mlijeko.\"\n"
+	r := speech.ParseParakeet(out)
+	if len(r.Segments) != 2 || r.Segments[0].End != 5200 || r.Segments[1].Start != 9000 {
+		t.Fatalf("segments: %+v", r.Segments)
+	}
+	if r.Text != "Sutra u 9 sati, nazvati zubara.\n\nKupi mlijeko." {
+		t.Fatalf("text: %q", r.Text)
+	}
+	if p := speech.ParseParakeet("Processing file: x.wav\nHello there.\n"); p.Text != "Hello there." {
+		t.Fatalf("plain: %q", p.Text)
+	}
+}
+
+func TestDictationModelIsTheAdmins(t *testing.T) {
+	a := newApp(t, nil)
+	if s := a.ok(a.bob, "GET", "/api/v1/settings", nil); s["dictation_model"] != speech.ParakeetModel {
+		t.Fatalf("dictation defaults to Parakeet: %v", s["dictation_model"])
+	}
+	a.ok(a.bob, "PUT", "/api/v1/settings", map[string]any{"dictation_model": "base"})
+	if s := a.ok(a.alice, "GET", "/api/v1/settings", nil); s["dictation_model"] != speech.ParakeetModel {
+		t.Fatalf("a member changed the dictation model: %v", s["dictation_model"])
+	}
+	a.ok(a.alice, "PUT", "/api/v1/settings", map[string]any{"dictation_model": "small"})
+	if s := a.ok(a.bob, "GET", "/api/v1/settings", nil); s["dictation_model"] != "small" || s["speech_model"] == "small" {
+		t.Fatalf("the admin's choice is the box's, for dictation only: %v %v", s["dictation_model"], s["speech_model"])
+	}
+	a.expect(http.StatusBadRequest, a.alice, "PUT", "/api/v1/settings", map[string]any{"dictation_model": "huge"})
+	a.expect(http.StatusConflict, a.alice, "DELETE", "/api/v1/speech/models/small", nil)
+}
+
+func TestPolishNeedsAnAI(t *testing.T) {
+	a := newApp(t, nil)
+	m := a.expect(http.StatusUnprocessableEntity, a.alice, "POST", "/api/v1/polish", map[string]any{"text": "um so uh call the dentist"})
+	if m["error"] == "" {
+		t.Fatalf("a plain reason: %v", m)
+	}
+	a.expect(http.StatusBadRequest, a.alice, "POST", "/api/v1/polish", map[string]any{"text": "  "})
 }

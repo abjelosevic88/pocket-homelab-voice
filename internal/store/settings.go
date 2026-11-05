@@ -10,7 +10,7 @@ const DefaultTitle = "Pocket Voice"
 
 // boxKeys are the settings shared by the whole box (admin-only); every other
 // key is personal and lives in user_settings.
-var boxKeys = map[string]bool{"title": true, "setup_complete": true, "speech_model": true}
+var boxKeys = map[string]bool{"title": true, "setup_complete": true, "speech_model": true, "dictation_model": true}
 
 // defaults returns the settings a person starts with.
 func (s *Store) defaults() Settings {

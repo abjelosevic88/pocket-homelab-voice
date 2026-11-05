@@ -28,11 +28,12 @@ Everything the UI does goes through `/api/v1`, JSON in and out. Sign in with the
 | `GET /search?q&limit` | `{items, total}` |
 | `GET /tags`, `GET /kinds` | Tags with counts; kinds and how many of each |
 | `POST /transcribe` | multipart `file`, optional `language` → `{text, language, segments, engine}`. Written out with the person's engine, language and words; nothing is kept |
-| `GET /speech` | How memos are written out: engine, ready, the model and every model with its download state |
+| `POST /polish` | JSON `{text, language}` → `{text, provider}`: dictated text tidied by the person's AI (filler words out, punctuation in, nothing added); nothing is kept |
+| `GET /speech` | How memos are written out: engine, ready, the memo and dictation models and every model with its engine and download state |
 
 ## Links (Pocket Core)
 
-Voice offers `voice:read` (memos, a memo and its recording, summary, day, search, tags, kinds), `voice:write` (`POST /memos`, and `PUT/DELETE` of the memos that app added) and `voice:transcribe` (`POST /transcribe`, `GET /speech`). Everything else answers 403 to a link token.
+Voice offers `voice:read` (memos, a memo and its recording, summary, day, search, tags, kinds), `voice:write` (`POST /memos`, and `PUT/DELETE` of the memos that app added) and `voice:transcribe` (`POST /transcribe`, `POST /polish`, `GET /speech`). Everything else answers 403 to a link token.
 
 It uses Pocket Notes (`notes:write`, `notes:read`), Pocket Tasks (`tasks:write`, `tasks:read`), Pocket Calendar (`calendar:write`, `calendar:read`), Pocket Money (`transactions:write`, `accounts:read`) and Pocket AI inference. Events, each with `user_email` and subject `memo:<id>`: `voice.memo_recorded`, `voice.memo_transcribed` (also `text`, `engine`, `language`) and `voice.memo_filed` (`app`, `kind`, `ref`, `item_title`, `item_url`).
 

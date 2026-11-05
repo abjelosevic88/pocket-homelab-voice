@@ -11,8 +11,8 @@ Environment variables; every one has a default. Personal settings (language, wor
 | `AUDIO_DIR` | `$DATA_DIR/audio` | Recordings, a folder per person |
 | `MAX_AUDIO_BYTES` | `536870912` | Largest recording upload (512 MB) |
 | `MAX_BODY_BYTES` | `67108864` | Largest JSON request, e.g. an export being imported (64 MB) |
-| `WHISPER_BIN`, `FFMPEG_BIN` | `whisper-cli`, `ffmpeg` | Both are in the Docker image (whisper.cpp on amd64 and arm64) |
-| `WHISPER_MODEL` | `large-v3-turbo-q5_0` | The box's model until an admin picks one in Settings → Writing out: `base`, `small`, `large-v3-turbo-q5_0` |
+| `WHISPER_BIN`, `PARAKEET_BIN`, `FFMPEG_BIN` | `whisper-cli`, `parakeet-cli`, `ffmpeg` | All in the Docker image (whisper.cpp, with Parakeet, on amd64 and arm64) |
+| `WHISPER_MODEL` | `large-v3-turbo-q5_0` | The memo model until an admin picks one in Settings → Writing out: `parakeet-tdt-0.6b-v3-q8_0`, `base`, `small`, `large-v3-turbo-q5_0`. Dictation (POST /transcribe) uses Parakeet unless an admin picks another |
 | `WHISPER_THREADS` | half the cores, 1–8 | Threads whisper uses |
 | `MODELS_DIR`, `MODEL_BASE_URL` | `$DATA_DIR/models`, Hugging Face `ggerganov/whisper.cpp` | Where models are kept and downloaded from (a mirror works) |
 | `TZ` | – | Time zone for "tomorrow" in memos and the morning message |

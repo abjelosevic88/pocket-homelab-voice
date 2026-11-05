@@ -361,6 +361,8 @@ a.list-row:hover, .list-row:has(> a.row-main:hover) { background: var(--hover); 
 .model-row.cur { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: var(--accent-soft); }
 .model-pick { flex: 1; display: flex; align-items: flex-start; gap: 10px; text-align: left; background: none; border: 0; font: inherit; color: inherit; padding: 8px; cursor: pointer; border-radius: 9px; min-width: 0; }
 .model-pick:disabled { cursor: default; }
+.model-info { padding: 8px 4px 8px 8px; min-width: 0; }
+.model-info .badge { margin-left: 6px; }
 .model-pick:not(:disabled):hover { background: var(--hover); }
 .radio { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--border-strong); flex-shrink: 0; margin-top: 2px; }
 .radio.on { border-color: var(--accent); box-shadow: inset 0 0 0 3px var(--surface), inset 0 0 0 8px var(--accent); }

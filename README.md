@@ -33,7 +33,7 @@
 ## What it does
 
 - **Record** in the browser on your phone or computer: a calm level line, pause and resume, the screen stays on. Stop, and it is saved and written out. A recording that cannot be sent is never thrown away: try again, or save the file.
-- **Written out on your server** by whisper.cpp (in the Docker image for Intel/AMD and ARM64): three models from Fast to Best, the one this box uses downloaded with the first memo. Your language or automatic, names and words to expect, and Serbian in Latin letters. Or, per person, OpenAI's transcription API or any OpenAI-compatible speech server.
+- **Written out on your server** by whisper.cpp (in the Docker image for Intel/AMD and ARM64): NVIDIA's Parakeet (about ten times faster, 25 European languages) or OpenAI's Whisper from Fast to Best (about 99 languages), one model for memos and one for dictation from other apps, downloaded when first chosen. Your language or automatic, names and words to expect, and Serbian in Latin letters. Or, per person, OpenAI's transcription API or any OpenAI-compatible speech server.
 - **Listen and read along**: a waveform you can tap anywhere, ten seconds back and forward, 1–2× speed, and the words highlighted as they are spoken; tap a sentence to hear it. Correct the words by hand.
 - **Tidied up by AI** (Pocket AI through Core, or your own OpenAI key; only the words go, never the recording): punctuation and paragraphs without the "um"s, a title, a short summary, what the memo is about (note, to-do, idea, journal, meeting, shopping, reminder) and a few tags.
 - **What it found, one tap away**: tasks with the day you said ("call the dentist tomorrow"), appointments with the time and place, a line for today's journal, money you spent. Nothing goes anywhere until you press its button; skip what you don't want.
@@ -69,7 +69,7 @@ Set `CORE_URL` and `CORE_REGISTRATION_KEY` and Voice joins the box: people sign 
 | Pocket Money | money you said you spent, as an expense when you press Book | `transactions:write`, `accounts:read` |
 | Pocket AI | tidying up and finding what is in a memo; the Ask button on every page | inference |
 
-Other apps can read your memos (`voice:read`: Pocket Day writes the day's memos into your journal, Pocket AI finds "what did I say about the garden?"), add one for you (`voice:write`), or have their own dictation written out here (`voice:transcribe`: words back, nothing kept — Pocket Day and Pocket AI use it, so dictation never goes to a cloud service). Events on the bus: `voice.memo_recorded`, `voice.memo_transcribed` (with the words), `voice.memo_filed`. Without Core every connection can be made directly with a URL and a token; the Core-only choices stay visible, greyed out.
+Other apps can read your memos (`voice:read`: Pocket Day writes the day's memos into your journal, Pocket AI finds "what did I say about the garden?"), add one for you (`voice:write`), or have their own dictation written out here (`voice:transcribe`: words back, nothing kept, optionally tidied by your AI — Pocket Day, Pocket AI and Pocket Launcher's Wispr-style dictation on the Mac use it, so dictation never goes to a cloud service). Events on the bus: `voice.memo_recorded`, `voice.memo_transcribed` (with the words), `voice.memo_filed`. Without Core every connection can be made directly with a URL and a token; the Core-only choices stay visible, greyed out.
 
 ## Develop
 

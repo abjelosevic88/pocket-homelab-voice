@@ -38,20 +38,30 @@ type Result struct {
 	Engine   string    `json:"engine"`
 }
 
-// Model is one whisper.cpp model Voice can use.
+// Model is one speech model Voice can use: OpenAI's Whisper (about 99 languages) or NVIDIA's
+// Parakeet (25 European languages, many times faster), both run by whisper.cpp.
 type Model struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	File  string `json:"file"`
-	Bytes int64  `json:"bytes"` // the download, roughly
-	Note  string `json:"note"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Engine string `json:"engine"` // whisper | parakeet
+	File   string `json:"file"`
+	URL    string `json:"-"`     // where it is downloaded from ("" = MODEL_BASE_URL + File)
+	Bytes  int64  `json:"bytes"` // the download, roughly
+	Note   string `json:"note"`
 }
 
-// Models are the whisper.cpp models offered in Settings, smallest first.
+// ParakeetModel is the fastest model: Parakeet TDT 0.6B v3, 8-bit.
+const ParakeetModel = "parakeet-tdt-0.6b-v3-q8_0"
+
+// Models are the models offered in Settings.
 var Models = []Model{
-	{ID: "base", Name: "Fast", File: "ggml-base.bin", Bytes: 147951465, Note: "Quick and rough; fine for clear English."},
-	{ID: "small", Name: "Good", File: "ggml-small.bin", Bytes: 487601967, Note: "Good in most languages and about three times faster than Best."},
-	{ID: "large-v3-turbo-q5_0", Name: "Best", File: "ggml-large-v3-turbo-q5_0.bin", Bytes: 574041195, Note: "The most accurate, also for Bosnian, Croatian and Serbian."},
+	{ID: ParakeetModel, Name: "Fastest", Engine: "parakeet", File: "ggml-parakeet-tdt-0.6b-v3-q8_0.bin",
+		URL: "https://huggingface.co/ggml-org/parakeet-GGUF/resolve/main/ggml-parakeet-tdt-0.6b-v3-q8_0.bin", Bytes: 668757119,
+		Note: "Parakeet: about ten times faster than Best and as accurate in 25 European languages, Croatian among them (Bosnian and Serbian come out in Latin letters). It finds the language itself and doesn't use the names to expect."},
+	{ID: "base", Name: "Fast", Engine: "whisper", File: "ggml-base.bin", Bytes: 147951465, Note: "Whisper base: quick and rough; fine for clear English."},
+	{ID: "small", Name: "Good", Engine: "whisper", File: "ggml-small.bin", Bytes: 487601967, Note: "Whisper small: good in most languages and about three times faster than Best."},
+	{ID: "large-v3-turbo-q5_0", Name: "Best", Engine: "whisper", File: "ggml-large-v3-turbo-q5_0.bin", Bytes: 574041195,
+		Note: "Whisper large-v3-turbo: the most accurate in about 99 languages, uses the names to expect; slow on a small server (about as long as the recording)."},
 }
 
 // DefaultModel is the model used until an admin picks another.
@@ -70,9 +80,10 @@ func ModelByID(id string) (Model, bool) {
 	return Model{}, false
 }
 
-// Local runs ffmpeg and whisper.cpp on this machine.
+// Local runs ffmpeg and whisper.cpp (and its parakeet-cli) on this machine.
 type Local struct {
 	Whisper   string // whisper-cli
+	Parakeet  string // parakeet-cli
 	FFmpeg    string
 	Dir       string // where the models are kept
 	BaseURL   string // where models are downloaded from
@@ -139,7 +150,7 @@ func (l *Local) ModelReady(m Model) bool {
 		return false
 	}
 	fi, err := f.Stat()
-	return err == nil && fi.Size() > 1<<20 && string(magic[:]) == "lmgg"
+	return err == nil && fi.Size() > 1<<20 && (m.Engine == "parakeet" || string(magic[:]) == "lmgg")
 }
 
 // DownloadState is the model's current download, if any.
@@ -214,7 +225,11 @@ func (l *Local) fetchFile(m Model, d *Download) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Hour)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(l.BaseURL, "/")+"/"+m.File, nil)
+	src := m.URL
+	if src == "" {
+		src = strings.TrimRight(l.BaseURL, "/") + "/" + m.File
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, src, nil)
 	if err != nil {
 		return err
 	}
@@ -327,6 +342,9 @@ type whisperJSON struct {
 // language code or "" (find out); prompt is words to expect (names, places).
 // progress gets 0–100 while it works.
 func (l *Local) Transcribe(ctx context.Context, wav string, m Model, lang, prompt string, progress func(int)) (*Result, error) {
+	if m.Engine == "parakeet" {
+		return l.parakeet(ctx, wav, m)
+	}
 	bin := look(l.Whisper)
 	if bin == "" {
 		return nil, errors.New("whisper.cpp is not installed here")
@@ -441,4 +459,78 @@ func JoinSegments(segs []Segment) string {
 		b.WriteString(strings.TrimSpace(s.Text))
 	}
 	return strings.TrimSpace(b.String())
+}
+
+// HasEngine reports whether the program for a model is installed.
+func (l *Local) HasEngine(m Model) bool {
+	if l == nil {
+		return false
+	}
+	if m.Engine == "parakeet" {
+		return look(l.Parakeet) != ""
+	}
+	return look(l.Whisper) != ""
+}
+
+var parakeetSegment = regexp.MustCompile(`^Segment \d+: \[(\d+) -> (\d+)\] "(.*)"$`)
+
+// parakeet writes out a 16 kHz WAV with parakeet-cli (it finds the language itself).
+func (l *Local) parakeet(ctx context.Context, wav string, m Model) (*Result, error) {
+	bin := look(l.Parakeet)
+	if bin == "" {
+		return nil, errors.New("parakeet-cli is not installed here")
+	}
+	if !l.ModelReady(m) {
+		return nil, errors.New("the speech model is not downloaded yet")
+	}
+	l.runs.Lock()
+	defer l.runs.Unlock()
+	threads := l.Threads
+	if threads <= 0 {
+		threads = DefaultThreads()
+	}
+	var stdout, stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, bin, "-m", l.ModelPath(m), "-f", wav, "-t", strconv.Itoa(threads), "-ps")
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, fmt.Errorf("parakeet stopped: %s", lastLine(stderr.String(), err.Error()))
+	}
+	res := ParseParakeet(stdout.String())
+	res.Engine = "parakeet " + m.ID
+	return res, nil
+}
+
+// ParseParakeet reads parakeet-cli's output: the "Segment N: [t0 -> t1] "text"" lines (t in
+// hundredths of a second), else the plain text lines.
+func ParseParakeet(out string) *Result {
+	res := &Result{Segments: []Segment{}}
+	var plain []string
+	for _, line := range strings.Split(out, "\n") {
+		t := strings.TrimSpace(line)
+		if t == "" || strings.HasPrefix(t, "[") || strings.HasPrefix(t, "Processing") || strings.HasPrefix(t, "Segments (") ||
+			strings.HasPrefix(t, "Tokens [") || strings.HasPrefix(t, "parakeet_") || strings.HasPrefix(t, "load_backend") {
+			continue
+		}
+		if mm := parakeetSegment.FindStringSubmatch(t); mm != nil {
+			a, _ := strconv.ParseInt(mm[1], 10, 64)
+			b, _ := strconv.ParseInt(mm[2], 10, 64)
+			if txt := strings.TrimSpace(mm[3]); txt != "" {
+				res.Segments = append(res.Segments, Segment{Start: a * 10, End: b * 10, Text: txt})
+			}
+			continue
+		}
+		plain = append(plain, t)
+	}
+	if len(res.Segments) > 0 {
+		res.Text = JoinSegments(res.Segments)
+	} else {
+		res.Text = strings.TrimSpace(strings.Join(plain, " "))
+		if res.Text != "" {
+			res.Segments = append(res.Segments, Segment{Text: res.Text})
+		}
+	}
+	return res
 }

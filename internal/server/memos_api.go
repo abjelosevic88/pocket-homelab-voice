@@ -696,13 +696,13 @@ func (s *Server) transcribeFile(ctx context.Context, path string, st store.Setti
 	if st.Engine == "api" {
 		return speech.NewRemote(st.OpenAIBaseURL, st.OpenAIKey, st.SpeechAPI).Transcribe(ctx, path, lang, prompt)
 	}
-	if !s.speech.HasWhisper() {
-		return nil, errNoWhisper
+	model := s.dictationModel(ctx)
+	if !s.speech.HasEngine(model) {
+		return nil, noEngine(model)
 	}
 	if !s.speech.HasFFmpeg() {
 		return nil, errors.New("ffmpeg is not installed here")
 	}
-	model := s.speechModel(ctx)
 	if !s.speech.ModelReady(model) {
 		if !s.cfg.DemoData {
 			s.speech.StartFetch(model)
@@ -724,21 +724,24 @@ func (s *Server) handleSpeech(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(ctx)
 	st, _ := s.store.GetSettings(ctx, u.ID)
 	cur := s.speechModel(ctx)
+	dict := s.dictationModel(ctx)
 	type modelOut struct {
 		speech.Model
-		Ready    bool             `json:"ready"`
-		Current  bool             `json:"current"`
-		Download *speech.Download `json:"download,omitempty"`
+		Ready     bool             `json:"ready"`
+		Current   bool             `json:"current"`   // memos are written out with it
+		Dictation bool             `json:"dictation"` // dictation from other apps is
+		Runs      bool             `json:"runs"`      // this server has the program for it
+		Download  *speech.Download `json:"download,omitempty"`
 	}
 	models := []modelOut{}
 	for _, m := range speech.Models {
-		mo := modelOut{Model: m, Ready: s.speech.ModelReady(m), Current: m.ID == cur.ID}
+		mo := modelOut{Model: m, Ready: s.speech.ModelReady(m), Current: m.ID == cur.ID, Dictation: m.ID == dict.ID, Runs: s.speech.HasEngine(m)}
 		if d := s.speech.DownloadState(m.ID); d != nil && !(d.Done && d.Error == "") {
 			mo.Download = d
 		}
 		models = append(models, mo)
 	}
-	ready := s.speech.HasWhisper() && s.speech.HasFFmpeg() && s.speech.ModelReady(cur)
+	ready := s.speech.HasEngine(cur) && s.speech.HasFFmpeg() && s.speech.ModelReady(cur)
 	why := ""
 	switch {
 	case st.Engine == "api":
@@ -746,15 +749,15 @@ func (s *Server) handleSpeech(w http.ResponseWriter, r *http.Request) {
 		if !ready {
 			why = "add your OpenAI API key under Settings → AI, or the address of a speech server"
 		}
-	case !s.speech.HasWhisper():
-		why = errNoWhisper.Error()
+	case !s.speech.HasEngine(cur):
+		why = noEngine(cur).Error()
 	case !s.speech.HasFFmpeg():
 		why = "ffmpeg is not installed here"
 	case !s.speech.ModelReady(cur):
 		why = "the speech model (" + cur.Name + ", about " + strconv.FormatInt(cur.Bytes>>20, 10) + " MB) is downloaded with the first memo"
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"engine": firstNonEmpty(st.Engine, "local"), "ready": ready, "detail": why,
-		"whisper": s.speech.HasWhisper(), "ffmpeg": s.speech.HasFFmpeg(), "model": cur.ID, "models": models, "threads": firstPositive(s.cfg.WhisperThreads, speech.DefaultThreads()),
+		"whisper": s.speech.HasWhisper(), "ffmpeg": s.speech.HasFFmpeg(), "model": cur.ID, "dictation_model": dict.ID, "models": models, "threads": firstPositive(s.cfg.WhisperThreads, speech.DefaultThreads()),
 		"languages": speech.Languages, "api_model": firstNonEmpty(st.SpeechAPI, speech.DefaultRemoteModel), "demo": s.cfg.DemoData})
 }
 
@@ -778,8 +781,8 @@ func (s *Server) handleModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodDelete {
-		if m.ID == s.speechModel(r.Context()).ID {
-			writeErr(w, http.StatusConflict, "this is the model in use; pick another one first")
+		if m.ID == s.speechModel(r.Context()).ID || m.ID == s.dictationModel(r.Context()).ID {
+			writeErr(w, http.StatusConflict, "this model is in use for memos or dictation; pick another one first")
 			return
 		}
 		if err := s.speech.RemoveModel(m); err != nil {

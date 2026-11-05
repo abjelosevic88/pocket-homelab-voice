@@ -62,7 +62,7 @@ func New(cfg *config.Config, st *store.Store, log *slog.Logger, webFS fs.FS) *Se
 	return &Server{cfg: cfg, store: st, log: log, webFS: webFS, started: time.Now(), oidc: &oidcProvider{},
 		core:     core.New(cfg.CoreURL, core.Options{DB: st.DB, TokenFile: cfg.DataDir + "/core.token", UserAgent: cfg.UserAgent}),
 		resolved: map[string]resolvedURL{},
-		speech:   &speech.Local{Whisper: cfg.WhisperBin, FFmpeg: cfg.FFmpegBin, Dir: cfg.ModelsDir, BaseURL: cfg.ModelBaseURL, UserAgent: cfg.UserAgent, Threads: cfg.WhisperThreads},
+		speech:   &speech.Local{Whisper: cfg.WhisperBin, Parakeet: cfg.ParakeetBin, FFmpeg: cfg.FFmpegBin, Dir: cfg.ModelsDir, BaseURL: cfg.ModelBaseURL, UserAgent: cfg.UserAgent, Threads: cfg.WhisperThreads},
 		kick:     make(chan struct{}, 1), prog: map[int64]progress{}, aiSem: make(chan struct{}, 2)}
 }
 
