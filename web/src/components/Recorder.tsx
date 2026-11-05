@@ -92,7 +92,8 @@ export function Recorder({ onClose, onSaved }: { onClose: () => void; onSaved: (
       } catch (e) {
         const name = (e as DOMException)?.name
         setPhase('denied')
-        setErr(name === 'NotAllowedError' ? 'Voice may not use the microphone. Allow it in the browser’s settings for this site, then try again.'
+        const framed = window.self !== window.top
+        setErr(name === 'NotAllowedError' ? (framed ? 'The page Voice is shown in does not let it use the microphone. Open Pocket Voice in its own tab to record.' : 'Voice may not use the microphone. Allow it in the browser’s settings for this site, then try again.')
           : name === 'NotFoundError' ? 'No microphone was found.' : (e as Error).message)
       }
     }
@@ -230,7 +231,10 @@ export function Recorder({ onClose, onSaved }: { onClose: () => void; onSaved: (
             <button type="button" className="btn primary" onClick={send}><Icon name="refresh" size={15} />Try again</button>
             <button type="button" className="btn" onClick={saveFile}><Icon name="download" size={15} />Save the file</button>
           </>}
-          {phase === 'denied' && <button type="button" className="btn" onClick={onClose}>Close</button>}
+          {phase === 'denied' && <>
+            {window.self !== window.top && <a className="btn primary" href={`${window.location.origin}/?record=1`} target="_blank" rel="noreferrer"><Icon name="external" size={15} />Open in its own tab</a>}
+            <button type="button" className="btn" onClick={onClose}>Close</button>
+          </>}
         </div>
         {live && <p className="muted small center rec-hint">Stop to save; it is written out on your own server. The screen stays on while you record.</p>}
       </div>

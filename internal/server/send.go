@@ -89,6 +89,9 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, "this suggestion was sent already")
 		return
 	}
+	if in.Action != nil {
+		fromAction(&in, m.Actions[*in.Action])
+	}
 	cl := s.clients(ctx, uid)
 	conn, err := cl.conn(ctx, target.app, target.scope)
 	if err != nil {
@@ -126,6 +129,31 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 	s.publish(ctx, uid, "voice.memo_filed", fmt.Sprintf("memo:%d:sent:%d", m.ID, sent.ID), map[string]any{
 		"memo_id": m.ID, "title": m.Title, "app": sent.App, "kind": sent.Kind, "ref": sent.Ref, "item_title": sent.Title, "item_url": sent.URL, "url": s.memoURL(m.ID)})
 	writeJSON(w, http.StatusOK, map[string]any{"sent": sent, "memo": s.memoOut(ctx, m)})
+}
+
+// fromAction fills what the caller left out from the suggestion it sends
+// (Pocket AI may send just {to, action}).
+func fromAction(in *sendInput, a store.Action) {
+	def := func(dst *string, v string) {
+		if strings.TrimSpace(*dst) == "" {
+			*dst = v
+		}
+	}
+	if a.Type == "journal" {
+		def(&in.Text, a.Text)
+	} else {
+		def(&in.Title, a.Title)
+	}
+	def(&in.Due, a.Due)
+	def(&in.Notes, a.Notes)
+	def(&in.Start, a.Start)
+	def(&in.End, a.End)
+	def(&in.Location, a.Location)
+	def(&in.Currency, a.Currency)
+	def(&in.Date, a.Date)
+	if in.Amount == 0 {
+		in.Amount = a.Amount
+	}
 }
 
 // memoText is the words worth sending: the tidy version when there is one.

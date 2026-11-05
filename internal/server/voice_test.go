@@ -369,3 +369,47 @@ func TestLatinLetters(t *testing.T) {
 		t.Errorf("fold: %q", speech.Fold("Ćevapi u ŽELJI"))
 	}
 }
+
+func TestSendSuggestionToTasks(t *testing.T) {
+	var got map[string]any
+	tasks := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer tsk" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if r.Method == "POST" && r.URL.Path == "/api/v1/tasks" {
+			_ = json.NewDecoder(r.Body).Decode(&got)
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": 77, "title": got["title"]})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer tasks.Close()
+	a := newApp(t, nil)
+	a.ok(a.alice, "PUT", "/api/v1/settings", map[string]any{"tasks_mode": "direct", "tasks_url": tasks.URL, "tasks_token": "tsk", "tasks_public_url": "https://tasks.test"})
+	m := a.expect(http.StatusCreated, a.alice, "POST", "/api/v1/memos", map[string]any{"text": "Call the dentist tomorrow."})
+	memo, err := a.st.GetMemo(t.Context(), a.ids["Alice"], n(id(m)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	memo.Actions = []store.Action{{Type: "task", Title: "Call the dentist", Due: "2026-11-06"}}
+	if err := a.st.SaveMemo(t.Context(), a.ids["Alice"], memo); err != nil {
+		t.Fatal(err)
+	}
+	// Bob cannot send Alice's memo; Alice sends just the suggestion's index
+	a.expect(http.StatusNotFound, a.bob, "POST", "/api/v1/memos/"+id(m)+"/send", map[string]any{"to": "task", "action": 0})
+	r := a.ok(a.alice, "POST", "/api/v1/memos/"+id(m)+"/send", map[string]any{"to": "task", "action": 0})
+	if got["title"] != "Call the dentist" || got["due"] != "2026-11-06" || !strings.Contains(got["url"].(string), "/memos/") {
+		t.Fatalf("task sent: %v", got)
+	}
+	sent := r["sent"].(map[string]any)
+	if sent["url"] != "https://tasks.test/inbox?task=77" || sent["app"] != "tasks" {
+		t.Fatalf("sent: %v", sent)
+	}
+	mm := r["memo"].(map[string]any)
+	act := mm["actions"].([]any)[0].(map[string]any)
+	if act["sent_to"] != "tasks" || mm["filed"] != true {
+		t.Fatalf("memo after sending: %v", mm)
+	}
+	a.expect(http.StatusConflict, a.alice, "POST", "/api/v1/memos/"+id(m)+"/send", map[string]any{"to": "task", "action": 0})
+}
