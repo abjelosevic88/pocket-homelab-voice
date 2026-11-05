@@ -413,3 +413,15 @@ func TestSendSuggestionToTasks(t *testing.T) {
 	}
 	a.expect(http.StatusConflict, a.alice, "POST", "/api/v1/memos/"+id(m)+"/send", map[string]any{"to": "task", "action": 0})
 }
+
+// The manifest must carry Voice's own slug: another app's slug would take
+// over that app's registration in Pocket Core.
+func TestManifestSlug(t *testing.T) {
+	src, err := os.ReadFile("server.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(src), `Slug: "voice", Name: "Pocket Voice"`) || strings.Contains(string(src), `Slug: "places"`) {
+		t.Fatal("the Core manifest slug is not voice")
+	}
+}

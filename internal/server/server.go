@@ -214,7 +214,7 @@ var eventTopics = []string{"voice.memo_recorded", "voice.memo_transcribed", "voi
 
 func (s *Server) registerWithCore(ctx context.Context) error {
 	m := core.Manifest{
-		Slug: "places", Name: "Pocket Voice",
+		Slug: "voice", Name: "Pocket Voice",
 		Description: "Voice memos you record on your phone, written out on this server (whisper.cpp; no audio leaves the box), tidied up with Pocket AI, and filed where they belong: a note or today's daily note in Pocket Notes, tasks in Pocket Tasks, an appointment in Pocket Calendar, an expense in Pocket Money. Other apps can use it to write out dictation locally.",
 		Icon:        "/favicon.svg", Version: Version,
 		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "VOICE",
