@@ -1,0 +1,5 @@
+# Pocket Voice behind Caddy. Browsers only allow the microphone over HTTPS.
+# Homepage widgets, Shortcuts and linked apps send their own bearer token to /api/*.
+voice.example.com {
+	reverse_proxy pocket-voice:8080
+}

@@ -1,0 +1,23 @@
+[Unit]
+Description=Pocket Voice — voice memos written out on your own server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pocket-voice
+Group=pocket-voice
+ExecStart=/usr/local/bin/pocket-voice
+Environment=DATA_DIR=/var/lib/pocket-voice
+Environment=PORT=8080
+Environment=BASE_URL=https://voice.example.com
+Environment=SECURE_COOKIES=true
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pocket-voice
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
