@@ -550,7 +550,7 @@ function Data() {
       const res = await fetch(`${V1}/import`, { method: 'POST', body: await file.text(), headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' })
       const j = await res.json()
       if (!res.ok) throw new Error(j.error)
-      toast(`Imported: ${j.memos} memos${j.sent ? `, ${j.sent} sent items` : ''}`)
+      toast(`Imported: ${j.memos} memos${j.sent ? `, ${j.sent} sent items` : ''}${j.dictations ? `, ${j.dictations} dictations` : ''}`)
       announceChange()
     } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
   }
@@ -578,7 +578,7 @@ function About() {
   if (!data) return <Loading />
   const counts = (data.counts || {}) as Record<string, number>
   const core = (data.core || {}) as { configured?: boolean; registered?: boolean; url?: string; error?: string }
-  const tiles: [string, number | undefined, string][] = [['Memos', counts.memos, 'mic'], ['Sent to apps', counts.sent, 'send'], ['Tokens', counts.api_tokens, 'key']]
+  const tiles: [string, number | undefined, string][] = [['Memos', counts.memos, 'mic'], ['Dictations', counts.dictations, 'dictation'], ['Sent to apps', counts.sent, 'send'], ['Tokens', counts.api_tokens, 'key']]
   const rows: [string, React.ReactNode][] = [
     ['Version', <code key="v">{String(data.version)}</code>],
     ['Uptime', String(data.uptime)],

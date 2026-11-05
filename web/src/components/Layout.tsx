@@ -99,6 +99,7 @@ function Shell() {
         case 'i': go('/'); break
         case 'm': go('/memos'); break
         case 's': go('/starred'); break
+        case 'd': go('/dictation'); break
         case ',': go('/settings'); break
         case '[': e.preventDefault(); toggleSidebar(); break
       }
@@ -114,6 +115,7 @@ function Shell() {
     { id: 'inbox', label: 'Inbox', icon: 'inbox', hint: 'I', keywords: 'to file new', run: () => navigate('/') },
     { id: 'all', label: 'All memos', icon: 'list', hint: 'M', run: () => navigate('/memos') },
     { id: 'starred', label: 'Starred', icon: 'star', hint: 'S', run: () => navigate('/starred') },
+    { id: 'dictation', label: 'Dictation history', icon: 'dictation', hint: 'D', keywords: 'launcher mac wispr typed words statistics stats saved', run: () => navigate('/dictation') },
     ...KINDS.map(k => ({ id: 'kind-' + k.id, label: k.plural, icon: k.icon, keywords: 'kind about', run: () => navigate(`/kind/${k.id}`) })),
     { id: 'settings', label: 'Settings', icon: 'settings', hint: ',', run: () => navigate('/settings') },
     { id: 'speech', label: 'Settings: writing out', icon: 'mic', keywords: 'whisper model language words transcribe', run: () => navigate('/settings/speech') },
@@ -145,7 +147,7 @@ function Shell() {
   )
 }
 
-const SECTION: Record<string, [string, string]> = { '': ['Inbox', '/'], inbox: ['Inbox', '/'], memos: ['Memos', '/memos'], starred: ['Starred', '/starred'], kind: ['Memos', '/memos'], tag: ['Memos', '/memos'] }
+const SECTION: Record<string, [string, string]> = { '': ['Inbox', '/'], inbox: ['Inbox', '/'], memos: ['Memos', '/memos'], starred: ['Starred', '/starred'], kind: ['Memos', '/memos'], tag: ['Memos', '/memos'], dictation: ['Dictation', '/dictation'] }
 
 function TopBar({ onMenu, onPalette, mobile, compact, sidebarOpen, crumb }: { onMenu: () => void; onPalette: () => void; mobile: boolean; compact: boolean; sidebarOpen: boolean; crumb: string }) {
   const { user, themeMode, setThemeMode, status, setUser } = useApp()

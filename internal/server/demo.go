@@ -241,8 +241,57 @@ func (s *Server) seedDemo(ctx context.Context, uid int64) error {
 			}
 		}
 	}
-	s.log.Info("demo data loaded", "memos", len(all))
+	n, err := s.seedDemoDictations(ctx, uid, rng)
+	if err != nil {
+		return err
+	}
+	s.log.Info("demo data loaded", "memos", len(all), "dictations", n)
 	return nil
+}
+
+// demoDictated is what the demo person dictated on the Mac with Pocket
+// Launcher, and into which app.
+var demoDictated = []struct{ app, appID, text string }{
+	{"Pocket Projects", "org.bjelke.pocket.projects", "Move the onboarding redesign to next sprint and ask Lejla for the final copy before Thursday."},
+	{"Slack", "com.tinyspeck.slackmacgap", "Sounds good, I'll review the pull request after lunch and leave comments on the caching part."},
+	{"Mail", "com.apple.mail", "Hi Daniel, thanks for the quick turnaround. The invoice looks right; I'll pay it by the end of the week."},
+	{"Messages", "com.apple.MobileSMS", "Running ten minutes late, order me the ćevapi please."},
+	{"Notes", "com.apple.Notes", "Ideas for the garden: raised bed by the fence, tomatoes and basil, a rain barrel under the gutter."},
+	{"Pocket Projects", "org.bjelke.pocket.projects", "Bug: the export button does nothing on Safari when the list is filtered by tag."},
+	{"Slack", "com.tinyspeck.slackmacgap", "Can we move the standup to ten tomorrow? I have the dentist at nine."},
+	{"Cursor", "com.todesktop.230313mzl4w4u92", "Write a test that posts the same dictation twice and checks the second answer is the stored one."},
+	{"Mail", "com.apple.mail", "Dear Ms. Hodžić, I would be glad to join the panel on the twelfth. Please send the agenda when it is ready."},
+	{"Messages", "com.apple.MobileSMS", "Happy birthday! Dinner on Saturday is on me."},
+	{"Cursor", "com.todesktop.230313mzl4w4u92", "Refactor the settings page so each section loads on its own and a failing one does not blank the rest."},
+	{"Pocket Projects", "org.bjelke.pocket.projects", "Add a checklist to the release task: changelog, tag, deploy, and a note in the team channel."},
+}
+
+func (s *Server) seedDemoDictations(ctx context.Context, uid int64, rng *rand.Rand) (int, error) {
+	n := 0
+	for day := 34; day >= 0; day-- {
+		if day == 6 || day == 13 || day == 20 {
+			continue // a few days off, so the streak means something
+		}
+		for k := 2 + rng.Intn(9); k > 0; k-- {
+			x := demoDictated[rng.Intn(len(demoDictated))]
+			at := time.Now().AddDate(0, 0, -day)
+			at = time.Date(at.Year(), at.Month(), at.Day(), 8+rng.Intn(11), rng.Intn(60), rng.Intn(60), 0, time.Local)
+			if at.After(time.Now()) {
+				at = time.Now().Add(-time.Duration(3+n%50) * time.Minute)
+			}
+			words := len(strings.Fields(x.text))
+			d := &store.Dictation{Ref: fmt.Sprintf("demo-%d", n), Text: x.text, App: x.app, AppID: x.appID, DurationMS: int64(float64(words)/2.5*1000) + int64(rng.Intn(1500)),
+				Engine: "parakeet-v3", Language: "en", Device: "Maya’s MacBook Pro", DictatedAt: store.DictationTime(at)}
+			if rng.Intn(3) == 0 {
+				d.Polished, d.Raw = true, "um so "+strings.ToLower(strings.TrimSuffix(x.text, "."))
+			}
+			if _, err := s.store.CreateDictation(ctx, uid, d); err != nil {
+				return n, err
+			}
+			n++
+		}
+	}
+	return n, nil
 }
 
 func demoKind(actionType string) string {

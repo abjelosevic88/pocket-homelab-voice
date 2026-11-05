@@ -61,3 +61,16 @@ export interface CalendarItem { id: number; name: string; color: string; writabl
 export interface NoteFolder { path: string; count: number }
 export interface TaskList { id: number; name: string; color: string }
 export interface TagCount { tag: string; count: number }
+
+export interface Dictation {
+  id: number; ref: string; text: string; raw: string; app: string; app_id: string; duration_ms: number; words: number
+  engine: string; language: string; device: string; polished: boolean; dictated_at: string; created_at: string
+}
+export interface DictationPage { items: Dictation[]; total: number; next: number }
+export interface DictationPeriod { words: number; sessions: number; saved_seconds: number }
+export interface DictationStats {
+  words: number; sessions: number; duration_ms: number; saved_seconds: number; wpm: number
+  today: DictationPeriod; week: DictationPeriod; streak: number
+  apps: { app: string; sessions: number; words: number }[]
+  days: { date: string; words: number; sessions: number }[]
+}

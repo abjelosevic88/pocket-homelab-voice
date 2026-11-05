@@ -55,7 +55,10 @@ const memoId = async (page, q) => page.evaluate(t => fetch('/api/v1/search?q=' +
   await shot(page, 'desktop-all')
   await go(page, '/settings/speech', 1500)
   await shot(page, 'desktop-speech')
-  for (const p of ['/starred', '/kind/journal', '/tag/work', '/memos?q=pita', '/settings/apps', '/settings/notifications', '/settings/general', '/settings/data', '/settings/ai', '/settings/tokens', '/settings/about']) await go(page, p, 500)
+  await go(page, '/dictation', 1500)
+  const dictation = await page.content()
+  assert.ok(dictation.includes('Time saved') && dictation.includes('Pocket Projects') && dictation.includes('dict-row'), 'the dictation page shows its numbers and the history')
+  for (const p of ['/starred', '/dictation?app=Slack', '/kind/journal', '/tag/work', '/memos?q=pita', '/settings/apps', '/settings/notifications', '/settings/general', '/settings/data', '/settings/ai', '/settings/tokens', '/settings/about']) await go(page, p, 500)
   await ctx.close()
 }
 

@@ -17,7 +17,7 @@ import (
 // in linkRoutes stays closed to it (403).
 
 var linkOffers = []core.Offer{
-	{Scope: "voice:read", Name: "See your voice memos", Description: "Read your voice memos: their words, the tidy version and summary, what they are about, where you sent them and the recording itself — for your journal, dashboards and Pocket AI."},
+	{Scope: "voice:read", Name: "See your voice memos", Description: "Read your voice memos: their words, the tidy version and summary, what they are about, where you sent them and the recording itself; and your dictation history with its statistics — for your journal, dashboards and Pocket AI."},
 	{Scope: "voice:write", Name: "Add voice memos", Description: "Add a recording or a dictated text as a memo to be written out and filed (\"keep this as a memo\"). It may change or remove only the memos that app added itself."},
 	{Scope: "voice:transcribe", Name: "Write out speech on this server", Description: "Send a short recording and get its words back, written out by whisper on this server with your language and words settings, so dictation in other apps never leaves the box. It may also have dictated text tidied up (filler words out, punctuation) by your AI. Nothing is kept."},
 }
@@ -30,7 +30,7 @@ type linkRoute struct {
 
 var linkRoutes = []linkRoute{
 	{"GET", regexp.MustCompile(`^/api/v1/auth/me$`), ""},
-	{"GET", regexp.MustCompile(`^/api/v1/(memos|summary|search|tags|kinds|day/\d{4}-\d{2}-\d{2})$`), "voice:read"},
+	{"GET", regexp.MustCompile(`^/api/v1/(memos|summary|search|tags|kinds|day/\d{4}-\d{2}-\d{2}|dictations|dictations/stats)$`), "voice:read"},
 	{"GET", regexp.MustCompile(`^/api/v1/memos/\d+(/audio)?$`), "voice:read"},
 	{"POST", regexp.MustCompile(`^/api/v1/memos$`), "voice:write"},
 	{"PUT DELETE", regexp.MustCompile(`^/api/v1/memos/\d+$`), "voice:write"},

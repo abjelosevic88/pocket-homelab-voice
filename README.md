@@ -40,10 +40,11 @@
 - **Send it where it belongs**: a note in Pocket Notes (in your folder, the summary on top and a link back to the recording), a line in today's note, tasks in Pocket Tasks, an event in Pocket Calendar, an expense in Pocket Money. Each memo shows what went where.
 - **An inbox**: what you have not dealt with yet. Sending a memo somewhere (or ticking it) takes it out. All memos by day, starred, by kind and by tag, and search that ignores accents and alphabets ("cevapi" finds "Ćevapi" and "ЋЕВАПИ").
 - **Bring them in**: Apple Voice Memos, your phone's recorder, WhatsApp voice notes, any m4a, mp3, wav, ogg, opus, webm or flac — each with the day it was recorded. Or type a memo.
+- **Dictation history**: what Pocket Launcher's dictation on the Mac typed for you (hold a key, talk, the words go into whatever app you are in) lands on the Dictation page, by day, with the app it went into, how long you spoke and what it was before AI polishing. On top: words, sessions and the time saved over typing, today's numbers, your streak, your speaking speed and a month of words per day. Filter by app, search, copy, delete, clear.
 - **Keep recordings** forever or let them go after a month to a year (the words stay; starred memos keep theirs).
 - **Pushes** through Apprise, ntfy or a webhook: a long memo written out, one that could not be, and a morning list of memos to file.
 - **Everyone their own**: each person has their own memos, recordings, settings and connections; admins see no one else's.
-- **Export** as JSON (and back in, idempotent) or every recording with its words as a ZIP; a whole-database backup for admins.
+- **Export** as JSON (memos and dictation history, and back in, idempotent) or every recording with its words as a ZIP; a whole-database backup for admins.
 
 ## Run it
 
@@ -69,7 +70,7 @@ Set `CORE_URL` and `CORE_REGISTRATION_KEY` and Voice joins the box: people sign 
 | Pocket Money | money you said you spent, as an expense when you press Book | `transactions:write`, `accounts:read` |
 | Pocket AI | tidying up and finding what is in a memo; the Ask button on every page | inference |
 
-Other apps can read your memos (`voice:read`: Pocket Day writes the day's memos into your journal, Pocket AI finds "what did I say about the garden?"), add one for you (`voice:write`), or have their own dictation written out here (`voice:transcribe`: words back, nothing kept, optionally tidied by your AI — Pocket Day, Pocket AI and Pocket Launcher's Wispr-style dictation on the Mac use it, so dictation never goes to a cloud service). Events on the bus: `voice.memo_recorded`, `voice.memo_transcribed` (with the words), `voice.memo_filed`. Without Core every connection can be made directly with a URL and a token; the Core-only choices stay visible, greyed out.
+Other apps can read your memos and dictation history (`voice:read`: Pocket Day writes the day's memos into your journal, Pocket AI finds "what did I say about the garden?"), add one for you (`voice:write`), or have their own dictation written out here (`voice:transcribe`: words back, nothing kept, optionally tidied by your AI — Pocket Day, Pocket AI and Pocket Launcher's Wispr-style dictation on the Mac use it, so dictation never goes to a cloud service). Events on the bus: `voice.memo_recorded`, `voice.memo_transcribed` (with the words), `voice.memo_filed`. Without Core every connection can be made directly with a URL and a token; the Core-only choices stay visible, greyed out.
 
 ## Develop
 

@@ -76,6 +76,13 @@ func (s *Server) Router() http.Handler {
 				r.Get("/tags", s.handleTags)
 				r.Get("/kinds", s.handleKinds)
 
+				// dictation history (Pocket Launcher on the Mac)
+				r.Post("/dictations", s.handleCreateDictation)
+				r.Get("/dictations", s.handleListDictations)
+				r.Delete("/dictations", s.handleClearDictations)
+				r.Get("/dictations/stats", s.handleDictationStats)
+				r.Delete("/dictations/{id}", s.handleDeleteDictation)
+
 				// writing out
 				r.Get("/speech", s.handleSpeech)
 				r.Post("/speech/models/{model}", s.handleModel)

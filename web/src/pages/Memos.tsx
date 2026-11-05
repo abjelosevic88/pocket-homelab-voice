@@ -15,7 +15,7 @@ export type View = 'inbox' | 'all' | 'starred' | 'kind' | 'tag'
 
 const TITLES: Record<View, string> = { inbox: 'Inbox', all: 'All memos', starred: 'Starred', kind: '', tag: '' }
 
-function dayLabel(day: string): string {
+export function dayLabel(day: string): string {
   const t = todayISO()
   if (day === t) return 'Today'
   if (day === addDays(t, -1)) return 'Yesterday'

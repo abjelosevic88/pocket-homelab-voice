@@ -417,17 +417,19 @@ func (s *Server) handleBackup(w http.ResponseWriter, r *http.Request) {
 // exportDoc is the JSON export of one person's data (the words, not the
 // recordings: those come with the ZIP export).
 type exportDoc struct {
-	App      string       `json:"app"`
-	Version  string       `json:"version"`
-	Exported string       `json:"exported_at"`
-	Memos    []store.Memo `json:"memos"`
-	Sent     []store.Sent `json:"sent"`
+	App        string            `json:"app"`
+	Version    string            `json:"version"`
+	Exported   string            `json:"exported_at"`
+	Memos      []store.Memo      `json:"memos"`
+	Sent       []store.Sent      `json:"sent"`
+	Dictations []store.Dictation `json:"dictations"`
 }
 
 func (s *Server) export(ctx context.Context, uid int64) exportDoc {
 	doc := exportDoc{App: "pocket-voice", Version: Version, Exported: store.Now()}
 	doc.Memos, _, _ = s.store.ListMemos(ctx, uid, store.MemoFilter{Oldest: true, Full: true})
 	doc.Sent, _ = s.store.AllSent(ctx, uid)
+	doc.Dictations, _, _, _ = s.store.ListDictations(ctx, uid, store.DictationFilter{Oldest: true})
 	for i := range doc.Memos {
 		doc.Memos[i].Sent = []store.Sent{}
 	}
@@ -500,7 +502,7 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) importPocket(ctx context.Context, uid int64, doc exportDoc) map[string]int {
-	counts := map[string]int{"memos": 0, "sent": 0}
+	counts := map[string]int{"memos": 0, "sent": 0, "dictations": 0}
 	ids := map[int64]int64{}
 	for _, m := range doc.Memos {
 		old := m.ID
@@ -535,6 +537,23 @@ func (s *Server) importPocket(ctx context.Context, uid int64, doc exportDoc) map
 		x.MemoID = id
 		if err := s.store.AddSent(ctx, uid, &x); err == nil {
 			counts["sent"]++
+		}
+	}
+	// dictations keep their ref: importing twice (or alongside the live
+	// history) adds each one once
+	for _, d := range doc.Dictations {
+		d.Ref, d.Text = strings.TrimSpace(d.Ref), strings.TrimSpace(d.Text)
+		if d.Ref == "" || d.Text == "" {
+			continue
+		}
+		d.ID = 0
+		if t, err := time.Parse(time.RFC3339Nano, d.DictatedAt); err == nil {
+			d.DictatedAt = store.DictationTime(t)
+		} else {
+			d.DictatedAt = ""
+		}
+		if created, err := s.store.CreateDictation(ctx, uid, &d); err == nil && created {
+			counts["dictations"]++
 		}
 	}
 	return counts

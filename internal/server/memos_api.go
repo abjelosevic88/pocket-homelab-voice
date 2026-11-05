@@ -538,8 +538,10 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 		}
 		return out
 	}
+	dw, ds := s.store.DictationWordsOn(ctx, uid, today)
 	writeJSON(w, http.StatusOK, map[string]any{"memos": c.All, "inbox": c.Inbox, "starred": c.Starred, "working": c.Working, "failed": c.Failed,
-		"minutes": c.Minutes, "today": len(todays), "latest_inbox": brief(inbox), "url": strings.TrimRight(s.cfg.BaseURL, "/") + "/"})
+		"minutes": c.Minutes, "today": len(todays), "latest_inbox": brief(inbox), "url": strings.TrimRight(s.cfg.BaseURL, "/") + "/",
+		"dictation_words_today": dw, "dictation_sessions_today": ds})
 }
 
 // openActions is how many suggestions of a memo wait to be sent.

@@ -19,6 +19,7 @@ export function Sidebar({ onCreate, onNavigate }: { onCreate: (k: CreateKind) =>
     { to: '/', label: 'Inbox', icon: 'inbox', end: true, count: counts?.inbox, hint: 'Memos to deal with' },
     { to: '/memos', label: 'All memos', icon: 'list', count: counts?.all },
     { to: '/starred', label: 'Starred', icon: 'star', count: counts?.starred },
+    { to: '/dictation', label: 'Dictation', icon: 'dictation' },
   ]
   return (
     <aside className="sidebar" aria-label="Pocket Voice">
