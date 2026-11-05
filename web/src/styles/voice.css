@@ -431,3 +431,17 @@ a.list-row:hover, .list-row:has(> a.row-main:hover) { background: var(--hover); 
   .dict-chart { grid-column: 1 / -1; }
   .dict-v { font-size: 24px; }
 }
+
+/* dictations among the memos, and today's line on top of the inbox */
+.dict-ico { background: color-mix(in srgb, #0d9488 13%, transparent) !important; color: #0d9488 !important; }
+[data-theme="dark"] .dict-ico { background: color-mix(in srgb, #14b8a6 22%, transparent) !important; color: #5eead4 !important; }
+.dict-mrow { align-items: flex-start; }
+.dict-mrow .list-ico, .dict-mrow .row-side { margin-top: 2px; }
+.dict-mtitle { font-size: 14px; line-height: 1.4; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.dict-msub { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.dict-strip { display: flex; align-items: center; gap: 10px; padding: 8px 14px; color: inherit; font-size: 13.5px; transition: background .12s; }
+.dict-strip:hover { background: var(--hover); }
+.dict-strip .list-ico { width: 28px; height: 28px; border-radius: 8px; }
+.dict-flash > .dict-row { animation: dict-flash 2.4s var(--ease); }
+@keyframes dict-flash { 0%, 35% { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); } 100% { background: transparent; box-shadow: inset 3px 0 0 transparent; } }
+.memo-row.ctx-on, .dict-row.ctx-on { background: var(--hover); }

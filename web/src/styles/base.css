@@ -373,3 +373,4 @@ input.bare, textarea.bare { border-color: transparent; background: transparent; 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+.menu-sub-caret { color: var(--muted); margin-right: -4px; }

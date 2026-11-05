@@ -8,7 +8,8 @@ import { fmtDate, fmtDateTime, plural, todayISO } from '../lib/format'
 import { clock, localDay, minutes } from '../lib/voice'
 import { useCrumb } from '../components/Layout'
 import { Icon } from '../components/icons'
-import { Confirm, Empty, Loading, copyText, errMsg, useDebounce, useToast } from '../components/ui'
+import { Confirm, ContextMenu, Empty, Loading, copyText, errMsg, useContextMenu, useDebounce, useToast } from '../components/ui'
+import { deleteDictation, dictationMenu } from '../lib/dictation'
 import { dayLabel } from './Memos'
 
 const PAGE = 50
@@ -89,6 +90,25 @@ export default function Dictation() {
     return () => document.removeEventListener('visibilitychange', h)
   }, [load, loadStats])
 
+  // /dictation?id=…: (from All memos or search) bring that one into view and light it up
+  const focusId = Number(sp.get('id')) || 0
+  const [flash, setFlash] = useState(0)
+  const tries = useRef(0)
+  useEffect(() => {
+    if (!focusId || !items || more) return
+    if (items.some(d => d.id === focusId)) {
+      setFlash(focusId)
+      setParam('id', '')
+      requestAnimationFrame(() => document.getElementById(`dict-${focusId}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }))
+      window.setTimeout(() => setFlash(f => (f === focusId ? 0 : f)), 2600)
+    } else if (next && tries.current++ < 40) {
+      loadMore()
+    } else {
+      setParam('id', '')
+      toast('That dictation is no longer here', 'err')
+    }
+  }, [focusId, items, next, more]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // load the next page when the end of the list scrolls into view
   const sentinel = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -109,22 +129,11 @@ export default function Dictation() {
     return out
   }, [items])
 
-  const remove = async (d: DictationT) => {
-    try {
-      await api.del(`${V1}/dictations/${d.id}`)
-      setItems(l => (l || []).filter(x => x.id !== d.id))
-      setTotal(t => Math.max(0, t - 1))
-      loadStats()
-      toast('Dictation deleted', 'ok', {
-        label: 'Undo', run: async () => {
-          try {
-            await api.post(`${V1}/dictations`, { ref: d.ref, text: d.text, raw: d.raw, app: d.app, app_id: d.app_id, duration_ms: d.duration_ms, engine: d.engine, language: d.language, device: d.device, polished: d.polished, dictated_at: d.dictated_at })
-            load(); loadStats()
-          } catch (e) { toast(errMsg(e), 'err') }
-        },
-      })
-    } catch (e) { toast(errMsg(e), 'err') }
-  }
+  const remove = (d: DictationT) => deleteDictation(d, toast, () => {
+    setItems(l => (l || []).filter(x => x.id !== d.id))
+    setTotal(t => Math.max(0, t - 1))
+    loadStats()
+  }, () => { load(); loadStats() })
   const clear = async () => {
     setConfirm(false)
     try {
@@ -170,7 +179,7 @@ export default function Dictation() {
         {groups.map(g => (
           <section key={g.day} className="card flush">
             <h3 className="day-h dict-day">{dayLabel(g.day)}</h3>
-            <ul className="list">{g.items.map(d => <li key={d.id}><DictationRow d={d} onDelete={() => remove(d)} onCopy={async () => toast(await copyText(d.text) ? 'Copied' : 'Could not copy', 'ok')} /></li>)}</ul>
+            <ul className="list">{g.items.map(d => <li key={d.id} id={`dict-${d.id}`} className={flash === d.id ? 'dict-flash' : undefined}><DictationRow d={d} onDelete={() => remove(d)} onCopy={async () => toast(await copyText(d.text) ? 'Copied' : 'Could not copy', 'ok')} /></li>)}</ul>
           </section>
         ))}
 
@@ -223,8 +232,11 @@ function StatsCard({ stats: s }: { stats: DictationStats }) {
 }
 
 function DictationRow({ d, onDelete, onCopy }: { d: DictationT; onDelete: () => void; onCopy: () => void }) {
-  return (
-    <div className="list-row dict-row">
+  const { toast } = useToast()
+  const ctx = useContextMenu()
+  return (<>
+    {ctx.at && <ContextMenu at={ctx.at} onClose={ctx.close} items={dictationMenu(d, toast, onDelete)} />}
+    <div className={`list-row dict-row ${ctx.at ? 'ctx-on' : ''}`} onContextMenu={e => { if (!window.getSelection()?.toString()) ctx.open(e) }}>
       <div className="grow">
         <p className="dict-text">{d.text}</p>
         <div className="dict-meta">
@@ -243,5 +255,5 @@ function DictationRow({ d, onDelete, onCopy }: { d: DictationT; onDelete: () => 
         <button type="button" className="btn ghost icon-only sm dict-del" onClick={onDelete} aria-label="Delete" title="Delete"><Icon name="trash" size={15} /></button>
       </div>
     </div>
-  )
+  </>)
 }

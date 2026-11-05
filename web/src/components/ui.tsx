@@ -274,52 +274,111 @@ export function Popover({ anchor, onClose, children, prefer = 'side', width = 36
 
 // ---------- menus ----------
 
-export type MenuItem = { label: React.ReactNode; icon?: string; onSelect?: () => void; danger?: boolean; disabled?: boolean; hint?: React.ReactNode; checked?: boolean } | 'sep' | { heading: string }
+export type MenuItem = { label: React.ReactNode; icon?: string; onSelect?: () => void; danger?: boolean; disabled?: boolean; hint?: React.ReactNode; checked?: boolean; submenu?: MenuItem[] } | 'sep' | { heading: string }
 
-export function Menu({ items, onClose, anchor, align = 'left', width = 230 }: { items: MenuItem[]; onClose: () => void; anchor: Anchor; align?: 'left' | 'right'; width?: number }) {
+/** A menu at an anchor (under a button, at the pointer, or beside its parent
+ *  item when `nested`): ↑↓ to move, ↩/→ to choose or open a submenu, ← and
+ *  Esc to close, a click outside closes it. */
+export function Menu({ items, onClose, anchor, align = 'left', width = 230, nested = false }: { items: MenuItem[]; onClose: () => void; anchor: Anchor; align?: 'left' | 'right'; width?: number; nested?: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
   const [hi, setHi] = useState(-1)
+  const [sub, setSub] = useState<{ i: number; anchor: Anchor } | null>(null)
   useDismiss(ref, onClose)
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
     const vw = window.innerWidth, vh = window.innerHeight
-    let left = align === 'right' ? anchor.x + anchor.w - el.offsetWidth : anchor.x
-    left = Math.max(8, Math.min(vw - el.offsetWidth - 8, left))
-    let top = anchor.y + anchor.h + 4
-    if (top + el.offsetHeight > vh - 8) top = Math.max(8, anchor.y - el.offsetHeight - 4)
+    let left: number, top: number
+    if (nested) {
+      left = anchor.x + anchor.w + 2
+      if (left + el.offsetWidth > vw - 8) left = anchor.x - el.offsetWidth - 2
+      left = Math.max(8, left)
+      top = Math.max(8, Math.min(vh - el.offsetHeight - 8, anchor.y - 4))
+    } else {
+      left = align === 'right' ? anchor.x + anchor.w - el.offsetWidth : anchor.x
+      left = Math.max(8, Math.min(vw - el.offsetWidth - 8, left))
+      top = anchor.y + anchor.h + 4
+      if (top + el.offsetHeight > vh - 8) top = Math.max(8, anchor.y - el.offsetHeight - 4)
+    }
     setPos({ left, top })
     el.focus()
-  }, [anchor.x, anchor.y, anchor.w, anchor.h, align])
+  }, [anchor.x, anchor.y, anchor.w, anchor.h, align, nested])
   const actionable = items.map((it, i) => (typeof it === 'object' && 'label' in it && !it.disabled ? i : -1)).filter(i => i >= 0)
+  const openSub = (i: number) => {
+    const el = ref.current?.querySelector<HTMLElement>(`[data-mi="${i}"]`)
+    if (el) setSub({ i, anchor: rectOf(el) })
+  }
+  const choose = (i: number) => {
+    const it = items[i]
+    if (typeof it !== 'object' || !('label' in it) || it.disabled) return
+    if (it.submenu) { openSub(i); return }
+    onClose(); it.onSelect?.()
+  }
   const onKey = (e: React.KeyboardEvent) => {
+    if (sub) return // the submenu has the keys
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault()
       const idx = actionable.indexOf(hi)
       const next = e.key === 'ArrowDown' ? actionable[(idx + 1) % actionable.length] : actionable[(idx - 1 + actionable.length) % actionable.length]
       setHi(next ?? -1)
-    } else if (e.key === 'Enter' && hi >= 0) {
+    } else if ((e.key === 'Enter' || e.key === 'ArrowRight') && hi >= 0) {
       e.preventDefault()
       const it = items[hi]
-      if (typeof it === 'object' && 'label' in it) { onClose(); it.onSelect?.() }
+      if (e.key === 'Enter' || (typeof it === 'object' && 'submenu' in it && it.submenu)) choose(hi)
+    } else if (e.key === 'ArrowLeft' && nested) {
+      e.preventDefault(); e.stopPropagation(); onClose()
     }
   }
+  const subItem = sub ? items[sub.i] : null
   return createPortal(
-    <div ref={ref} tabIndex={-1} className="menu" role="menu" style={{ minWidth: width, left: pos?.left ?? -9999, top: pos?.top ?? -9999 }} onKeyDown={onKey}>
+    <div ref={ref} tabIndex={-1} className="menu" role="menu" data-keep-open={nested ? '' : undefined} style={{ minWidth: width, left: pos?.left ?? -9999, top: pos?.top ?? -9999 }} onKeyDown={onKey}>
       {items.map((it, i) => {
         if (it === 'sep') return <div key={i} className="menu-sep" />
         if ('heading' in it) return <div key={i} className="menu-heading">{it.heading}</div>
         return (
-          <button key={i} type="button" role="menuitem" disabled={it.disabled} className={`menu-item ${it.danger ? 'danger' : ''} ${hi === i ? 'hi' : ''}`} onMouseEnter={() => setHi(i)}
-            onClick={() => { onClose(); it.onSelect?.() }}>
+          <button key={i} data-mi={i} type="button" role="menuitem" aria-haspopup={it.submenu ? 'menu' : undefined} aria-expanded={it.submenu ? sub?.i === i : undefined} disabled={it.disabled}
+            className={`menu-item ${it.danger ? 'danger' : ''} ${hi === i || sub?.i === i ? 'hi' : ''}`}
+            onMouseEnter={() => { setHi(i); if (it.submenu) { if (sub?.i !== i) openSub(i) } else if (sub) setSub(null) }}
+            onClick={() => choose(i)}>
             <span className="menu-ico">{it.checked !== undefined ? (it.checked ? <Icon name="check" size={15} /> : null) : it.icon ? <Icon name={it.icon} size={15} /> : null}</span>
             <span className="grow">{it.label}</span>
             {it.hint && <span className="menu-hint">{it.hint}</span>}
+            {it.submenu && <Icon name="chevron-right" size={14} className="menu-sub-caret" />}
           </button>
         )
       })}
+      {sub && subItem && typeof subItem === 'object' && 'submenu' in subItem && subItem.submenu && (
+        <Menu nested anchor={sub.anchor} width={200} onClose={() => { setSub(null); ref.current?.focus() }}
+          items={subItem.submenu.map(x => (typeof x === 'object' && 'label' in x ? { ...x, onSelect: () => { onClose(); x.onSelect?.() } } : x))} />
+      )}
     </div>, document.body)
+}
+
+/** A right-click menu at the pointer; scrolling the page closes it. */
+export function ContextMenu({ at, items, onClose, width = 230 }: { at: { x: number; y: number }; items: MenuItem[]; onClose: () => void; width?: number }) {
+  const close = useRef(onClose)
+  close.current = onClose
+  useEffect(() => {
+    const h = (e: Event) => { if (!(e.target instanceof Element && e.target.closest('.menu'))) close.current() }
+    window.addEventListener('scroll', h, true)
+    window.addEventListener('resize', h)
+    window.addEventListener('blur', h)
+    return () => { window.removeEventListener('scroll', h, true); window.removeEventListener('resize', h); window.removeEventListener('blur', h) }
+  }, [])
+  return <Menu anchor={{ x: at.x, y: at.y, w: 0, h: 0 }} items={items} onClose={onClose} width={width} />
+}
+
+/** Right-click handling for a list row: `open(e)` shows the row's menu at the
+ *  pointer (Shift + right-click keeps the browser's own menu). */
+export function useContextMenu() {
+  const [at, setAt] = useState<{ x: number; y: number } | null>(null)
+  const open = (e: React.MouseEvent) => {
+    if (e.shiftKey) return
+    e.preventDefault(); e.stopPropagation()
+    setAt({ x: e.clientX, y: e.clientY })
+  }
+  return { at, open, close: () => setAt(null) }
 }
 
 /** A button that opens a Menu under itself. */

@@ -153,6 +153,13 @@ func TestDictationListFilters(t *testing.T) {
 	if l := a.ok(a.alice, "GET", "/api/v1/dictations?q=CEVAP", nil); refs(l) != "d3,d4" || num(l, "total") != 2 {
 		t.Fatalf("q: %s", refs(l))
 	}
+	// the search behind the palette finds dictations next to the memos
+	if l := a.ok(a.alice, "GET", "/api/v1/search?q=cevap", nil); num(l, "total") != 0 || num(num2(l, "dictations"), "total") != 2 || len(num2(l, "dictations")["items"].([]any)) != 2 {
+		t.Fatalf("search: %v", l)
+	}
+	if l := a.ok(a.bob, "GET", "/api/v1/search?q=cevap", nil); num(num2(l, "dictations"), "total") != 0 {
+		t.Fatalf("Bob's search finds Alice's dictations: %v", l)
+	}
 	if l := a.ok(a.alice, "GET", "/api/v1/dictations?app=Slack", nil); refs(l) != "d2,d1" {
 		t.Fatalf("app: %s", refs(l))
 	}

@@ -41,7 +41,7 @@ In the stats, `saved_seconds` is the time saved over typing at 40 words a minute
 |---|---|
 | `GET /summary` | `{memos, inbox, starred, working, failed, minutes, today, latest_inbox, url, dictation_words_today, dictation_sessions_today}` |
 | `GET /day/{YYYY-MM-DD}` | `{memos: [{id, title, kind, time, duration_ms, summary, text, status, sent, url}], count, duration_ms}` — what Pocket Day writes into the journal |
-| `GET /search?q&limit` | `{items, total}` |
+| `GET /search?q&limit` | `{items, total, dictations: {items, total}}`: the memos, and the dictations with these words |
 | `GET /tags`, `GET /kinds` | Tags with counts; kinds and how many of each |
 | `POST /transcribe` | multipart `file`, optional `language` → `{text, language, segments, engine}`. Written out with the person's engine, language and words; nothing is kept |
 | `POST /polish` | JSON `{text, language}` → `{text, provider}`: dictated text tidied by the person's AI (filler words out, punctuation in, nothing added); nothing is kept |

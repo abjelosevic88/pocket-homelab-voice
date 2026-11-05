@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
-import type { Memo } from '../lib/types'
+import type { Dictation, Memo } from '../lib/types'
 import { kindIcon, localDay, preview } from '../lib/voice'
 import { fmtDate } from '../lib/format'
 import { useDebounce } from './ui'
@@ -11,7 +11,7 @@ import { Icon } from './icons'
 
 export interface PaletteCommand { id: string; label: string; icon: string; hint?: string; keywords?: string; run: () => void }
 
-interface Found { items: Memo[]; total: number }
+interface Found { items: Memo[]; total: number; dictations?: { items: Dictation[]; total: number } }
 
 export function CommandPalette({ onClose, commands }: { onClose: () => void; commands: PaletteCommand[] }) {
   const navigate = useNavigate()
@@ -36,7 +36,8 @@ export function CommandPalette({ onClose, commands }: { onClose: () => void; com
     const cmds = commands.filter(c => !n || hit(`${c.label} ${c.keywords || ''}`)).map(c => ({ key: c.id, group: 'Commands', icon: <Icon name={c.icon} size={16} />, label: c.label, hint: c.hint, run: c.run }))
     const f = n.length >= 2 ? found : null
     const memos = (f?.items || []).map(m => ({ key: `m${m.id}`, group: 'Memos', icon: <Icon name={kindIcon(m.kind)} size={16} />, label: m.title || 'Memo', sub: [fmtDate(localDay(m.recorded_at)), preview(m).slice(0, 90)].filter(Boolean).join(' · '), run: () => navigate(`/memos/${m.id}`) }))
-    if (n) out.push(...memos, ...cmds)
+    const dicts = (f?.dictations?.items || []).slice(0, 6).map(d => ({ key: `d${d.id}`, group: 'Dictations', icon: <Icon name="dictation" size={16} />, label: d.text.length > 90 ? d.text.slice(0, 90) + '…' : d.text, sub: [fmtDate(localDay(d.dictated_at)), d.app && `→ ${d.app}`].filter(Boolean).join(' · '), run: () => navigate(`/dictation?id=${d.id}`) }))
+    if (n) out.push(...memos, ...dicts, ...cmds)
     else out.push(...cmds)
     return out
   }, [q, found, commands, navigate])
@@ -50,7 +51,7 @@ export function CommandPalette({ onClose, commands }: { onClose: () => void; com
       <div className="palette-box" role="dialog" aria-label="Search and commands">
         <div className="pal-input">
           <Icon name="search" size={18} />
-          <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Find a memo by its words, or run a command…" aria-label="Search"
+          <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Find a memo or a dictation by its words, or run a command…" aria-label="Search"
             onKeyDown={e => {
               if (e.key === 'ArrowDown') { e.preventDefault(); setHi(h => Math.min(rows.length - 1, h + 1)) }
               else if (e.key === 'ArrowUp') { e.preventDefault(); setHi(h => Math.max(0, h - 1)) }

@@ -612,7 +612,14 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "search")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": s.memoList(ctx, ms), "total": total})
+	// what was dictated on the Mac is found too, next to the memos
+	ds, dtotal, _, err := s.store.ListDictations(ctx, actorID(ctx), store.DictationFilter{Q: q, Limit: limit})
+	if err != nil {
+		s.fail(w, err, "search")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": s.memoList(ctx, ms), "total": total,
+		"dictations": map[string]any{"items": ds, "total": dtotal}})
 }
 
 func (s *Server) handleTags(w http.ResponseWriter, r *http.Request) {
