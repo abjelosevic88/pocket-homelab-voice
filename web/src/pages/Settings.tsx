@@ -1,9 +1,9 @@
 import { AskButton } from '../components/AskButton'
 import React, { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
-import type { APIToken, AppSlug, CalendarItem, ConnMode, MoneyAccount, MoneyCategory, NoteFolder, Picked, Settings as SettingsT, Speech, TaskList, User } from '../lib/types'
+import type { APIToken, AppSlug, AppStyle, DictationPage, DictationStyle, DictationStyles, CalendarItem, ConnMode, MoneyAccount, MoneyCategory, NoteFolder, Picked, Settings as SettingsT, Speech, TaskList, User } from '../lib/types'
 import { DATE_FORMATS, TIME_FORMATS, fmtBytes, fmtDateTime, type DateFormat, type TimeFormat } from '../lib/format'
 import { Avatar, Confirm, CoreHint, Field, Loading, Modal, Segmented, SettingRow, Switch, Tabs, useAsync, useIsMobile, useToast } from '../components/ui'
 import { Icon } from '../components/icons'
@@ -13,11 +13,12 @@ import { PocketModelSelect } from '../components/PocketModelSelect'
 import { announceChange } from '../lib/data'
 import { LANG_NAMES } from '../lib/voice'
 
-type TabId = 'general' | 'speech' | 'notifications' | 'apps' | 'ai' | 'profile' | 'people' | 'tokens' | 'data' | 'about'
+type TabId = 'general' | 'speech' | 'dictation' | 'notifications' | 'apps' | 'ai' | 'profile' | 'people' | 'tokens' | 'data' | 'about'
 
 const TABS: { id: TabId; label: string; icon: string; sub: string }[] = [
   { id: 'general', label: 'General', icon: 'home', sub: 'Playback, your currency, dates and the app title.' },
   { id: 'speech', label: 'Writing out', icon: 'mic', sub: 'How your recordings become words: on this server with whisper.cpp, the language you speak, names to expect, and how long recordings are kept.' },
+  { id: 'dictation', label: 'Dictation', icon: 'dictation', sub: 'How dictation from Pocket Launcher on your Mac is polished: a style for each app you dictate into.' },
   { id: 'notifications', label: 'Notifications', icon: 'bell', sub: 'A long memo written out, one that could not be, and the morning list of memos to file.' },
   { id: 'apps', label: 'Connected apps', icon: 'layers', sub: 'Where memos go: Pocket Notes, Pocket Tasks, Pocket Calendar and Pocket Money.' },
   { id: 'ai', label: 'AI', icon: 'sparkles', sub: 'Who tidies memos up and finds the tasks and dates in them: Pocket AI through Core, or your own OpenAI key.' },
@@ -66,6 +67,7 @@ export default function Settings() {
             <div className="set-title"><h2>{current.label}</h2><p>{current.sub}</p></div>
             {tab === 'general' && <General />}
             {tab === 'speech' && <SpeechTab />}
+            {tab === 'dictation' && <DictationTab />}
             {tab === 'notifications' && <Notifications />}
             {tab === 'apps' && <Integrations />}
             {tab === 'ai' && <AITab />}
@@ -197,7 +199,7 @@ function SpeechTab() {
           <Select ariaLabel="Language" value={f.language} onChange={v => save({ language: v })} options={langs} placeholder="Find out by itself" clearLabel="Find out by itself" />
         </SettingRow>
         <SettingRow title="Serbian in Latin letters" help="Whisper writes Serbian in Cyrillic; this turns it into Latin letters (also for Bosnian and Croatian, when it slips)."><Switch checked={f.latin} onChange={v => save({ latin: v })} label="Latin letters" /></SettingRow>
-        <SettingRow title="Names and words to expect" stack help="People, places, products and words you use, separated by commas. They help Whisper spell them right (Parakeet doesn't use them).">
+        <SettingRow title="Names and words to expect" stack help={<>People, places, products and words you use, separated by commas. They help Whisper spell them right (Parakeet doesn't use them). The <Link to="/dictionary">Dictionary</Link> is the better place for them: there you can also say what to replace, and it works for dictation too.</>}>
           <textarea rows={3} value={f.vocabulary} onChange={e => setF({ ...f, vocabulary: e.target.value })} onBlur={() => save({ vocabulary: f.vocabulary })} placeholder="Amra, Mirza, Kibe Mahala, Jahorina, Pocket Core" />
         </SettingRow>
       </Section>
@@ -550,7 +552,7 @@ function Data() {
       const res = await fetch(`${V1}/import`, { method: 'POST', body: await file.text(), headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' })
       const j = await res.json()
       if (!res.ok) throw new Error(j.error)
-      toast(`Imported: ${j.memos} memos${j.sent ? `, ${j.sent} sent items` : ''}${j.dictations ? `, ${j.dictations} dictations` : ''}`)
+      toast(`Imported: ${j.memos} memos${j.sent ? `, ${j.sent} sent items` : ''}${j.dictations ? `, ${j.dictations} dictations` : ''}${j.dictionary ? `, ${j.dictionary} dictionary words` : ''}`)
       announceChange()
     } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
   }
@@ -614,6 +616,78 @@ function About() {
       </div>
       <p className="muted small">Open source (MIT). Part of the Pocket apps: Pocket Core connects them — Notes, Tasks, Calendar, Money, Day, Pocket AI and more. Speech recognition by whisper.cpp (MIT) with OpenAI's Whisper models.</p>
       {keys && <ShortcutsSheet onClose={() => setKeys(false)} />}
+    </div>
+  )
+}
+
+const STYLES: { id: DictationStyle; label: string; help: string }[] = [
+  { id: 'natural', label: 'Natural', help: 'Punctuation and capitals, filler words and false starts out, your own words kept.' },
+  { id: 'casual', label: 'Casual', help: 'Relaxed, for chat: lower case is fine, no greetings or sign-offs added.' },
+  { id: 'formal', label: 'Formal', help: 'Complete sentences, proper capitals and punctuation, paragraphs: for email and documents.' },
+  { id: 'code', label: 'Code', help: 'Names, paths and commands kept exactly, code in backticks, no full stop at the end: for editors and terminals.' },
+  { id: 'none', label: 'No AI', help: 'Typed as heard, only your dictionary’s replacements.' },
+]
+const styleOptions = STYLES.map(s => ({ value: s.id, label: s.label, hint: s.help }))
+
+function DictationTab() {
+  const { toast } = useToast()
+  const [st, setSt] = useState<DictationStyles | null>(null)
+  const [seen, setSeen] = useState<{ app: string; app_id: string }[]>([])
+  const [name, setName] = useState('')
+  const [bundle, setBundle] = useState('')
+  useEffect(() => {
+    api.get<DictationStyles>(`${V1}/dictation/styles`).then(setSt).catch(e => toast((e as Error).message, 'err'))
+    // the apps you dictated into, for quick picks
+    api.get<DictationPage>(`${V1}/dictations?limit=200`).then(r => {
+      const m = new Map<string, { app: string; app_id: string }>()
+      for (const d of r.items) if (d.app || d.app_id) m.set((d.app_id || d.app).toLowerCase(), { app: d.app, app_id: d.app_id })
+      setSeen([...m.values()])
+    }).catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const put = async (next: DictationStyles) => {
+    const prev = st
+    setSt(next)
+    try { setSt(await api.put<DictationStyles>(`${V1}/dictation/styles`, next)); toast('Saved') } catch (e) { setSt(prev); toast((e as Error).message, 'err') }
+  }
+  if (!st) return <Loading />
+  const key = (a: { app: string; app_id: string }) => (a.app_id || 'name:' + a.app).toLowerCase()
+  const have = new Set(st.apps.map(key))
+  const addApp = (a: { app: string; app_id: string }, style: DictationStyle = 'natural') => {
+    if (!a.app.trim() && !a.app_id.trim()) return
+    if (have.has(key(a))) { toast('That app has a style already', 'err'); return }
+    put({ ...st, apps: [...st.apps, { app: a.app.trim(), app_id: a.app_id.trim(), style }] })
+    setName(''); setBundle('')
+  }
+  const picks = seen.filter(a => !have.has(key(a)))
+  return (
+    <div className="stack loose">
+      <Section title="Styles" icon="sparkles" sub="When you dictate on the Mac, your AI tidies the words before they are typed. The style decides how much, and can be different for each app.">
+        <div className="style-legend">{STYLES.map(s => <div key={s.id}><b>{s.label}</b><span className="muted small">{s.help}</span></div>)}</div>
+        <SettingRow title="Everywhere else" help="The style for apps without one of their own.">
+          <Select ariaLabel="Default style" value={st.default} onChange={v => put({ ...st, default: v as DictationStyle })} options={styleOptions} />
+        </SettingRow>
+      </Section>
+      <Section title="Per app" icon="layers" sub="An app is matched by its bundle id (com.tinyspeck.slackmacgap) or, without one, by its name.">
+        {st.apps.length === 0 && <p className="muted small">No app has its own style yet.</p>}
+        {st.apps.map((a: AppStyle, i: number) => (
+          <SettingRow key={key(a) + i} title={a.app || a.app_id} help={a.app && a.app_id ? <code>{a.app_id}</code> : a.app_id ? undefined : 'matched by name'}>
+            <div className="row">
+              <Select ariaLabel={`Style for ${a.app || a.app_id}`} value={a.style} onChange={v => put({ ...st, apps: st.apps.map((x, j) => (j === i ? { ...x, style: v as DictationStyle } : x)) })} options={styleOptions} />
+              <button type="button" className="btn ghost icon-only sm" aria-label={`Remove ${a.app || a.app_id}`} title="Remove" onClick={() => put({ ...st, apps: st.apps.filter((_, j) => j !== i) })}><Icon name="trash" size={15} /></button>
+            </div>
+          </SettingRow>
+        ))}
+        <form className="style-add" onSubmit={e => { e.preventDefault(); addApp({ app: name, app_id: bundle }) }}>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="App name (Slack)" aria-label="App name" maxLength={200} />
+          <input value={bundle} onChange={e => setBundle(e.target.value)} placeholder="Bundle id (optional)" aria-label="Bundle id" maxLength={255} />
+          <button type="submit" className="btn" disabled={!name.trim() && !bundle.trim()}><Icon name="plus" size={15} />Add app</button>
+        </form>
+        {picks.length > 0 && <div className="stack tight">
+          <span className="muted small">Apps you dictated into:</span>
+          <div className="chips">{picks.slice(0, 16).map(a => <button key={key(a)} type="button" className="chip" title={a.app_id || undefined} onClick={() => addApp(a)}><Icon name="plus" size={13} />{a.app || a.app_id}</button>)}</div>
+        </div>}
+      </Section>
+      <p className="muted small">Your <Link to="/dictionary">Dictionary</Link> works in every style: its words are spelled your way and its replacements are always made.</p>
     </div>
   )
 }

@@ -162,14 +162,23 @@ function Prose({ text }: { text: string }) {
     if (last && last.list === item && last.lines.length) last.lines.push(item ? line.replace(/^\s*[-•*]\s+/, '') : line)
     else blocks.push({ list: item, lines: [item ? line.replace(/^\s*[-•*]\s+/, '') : line] })
   }
+  const speakerLine = /^(You|Others):\s*/
   return (
     <div className="memo-text">
       {blocks.filter(b => b.lines.length).map((b, i) => b.list
         ? <ul key={i}>{b.lines.map((l, j) => <li key={j}>{l}</li>)}</ul>
-        : <p key={i}>{b.lines.join('\n')}</p>)}
+        : b.lines.some(l => speakerLine.test(l))
+          // a meeting's lines: "You: …" / "Others: …"
+          ? <div key={i} className="turns">{b.lines.map((l, j) => {
+            const who = l.match(speakerLine)?.[1] || ''
+            return <div key={j} className={`turn ${speakerClass(who)}`}>{who && <span className="spk">{who}</span>}<p>{l.replace(speakerLine, '')}</p></div>
+          })}</div>
+          : <p key={i}>{b.lines.join('\n')}</p>)}
     </div>
   )
 }
+
+const speakerClass = (who: string) => (who === 'You' ? 'spk-you' : who ? 'spk-others' : '')
 
 function TitleEdit({ value, onDone }: { value: string; onDone: (v: string) => void }) {
   const [v, setV] = useState(value)
@@ -192,6 +201,30 @@ function Words({ memo: m, time, onSeek }: { memo: Memo; time: number; onSeek: (m
   if (m.status !== 'done' && !m.transcript) return <p className="muted">The words appear here once the recording is written out.</p>
   if (!m.transcript) return <p className="muted">Nothing was said in this recording.</p>
   if (m.edited || !m.segments.length || !m.has_audio) return <Prose text={m.transcript} />
+  const seg = (s: Memo['segments'][number], i: number) => {
+    const on = time >= s.s && time < (m.segments[i + 1]?.s ?? s.e + 1500)
+    return <span key={i} className={`seg ${on ? 'on' : ''}`} onClick={() => onSeek(s.s)} role="button" tabIndex={0} title={clock(s.s)}
+      onKeyDown={e => { if (e.key === 'Enter') onSeek(s.s) }}>{s.t} </span>
+  }
+  // a meeting: turn by turn, who spoke
+  if (m.segments.some(s => s.speaker)) {
+    const turns: { speaker: string; items: [Memo['segments'][number], number][] }[] = []
+    m.segments.forEach((s, i) => {
+      const who = s.speaker || ''
+      if (!turns.length || turns[turns.length - 1].speaker !== who) turns.push({ speaker: who, items: [] })
+      turns[turns.length - 1].items.push([s, i])
+    })
+    return (
+      <div className="turns">
+        {turns.map((t, k) => (
+          <div key={k} className={`turn ${speakerClass(t.speaker)}`}>
+            <span className="spk">{t.speaker || '—'}</span>
+            <p className="memo-words">{t.items.map(([s, i]) => seg(s, i))}</p>
+          </div>
+        ))}
+      </div>
+    )
+  }
   return (
     <p className="memo-words">
       {m.segments.map((s, i) => {

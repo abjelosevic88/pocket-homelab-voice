@@ -185,6 +185,10 @@ func (s *Server) handleCreateMemo(w http.ResponseWriter, r *http.Request) {
 		if !s.memoFields(w, m, fv("title"), fv("kind"), fv("tags"), fv("recorded_at"), fv("language")) {
 			return
 		}
+		// a meeting (Pocket Launcher on the Mac): stereo, you on the left, the call on the right
+		if oneOf(strings.ToLower(fv("meeting")), []string{"1", "true", "yes"}) {
+			m.Meeting, m.Kind, m.KindSet = true, "meeting", true
+		}
 		if d, err := strconv.ParseInt(fv("duration_ms"), 10, 64); err == nil && d > 0 {
 			m.DurationMS = d
 		}
@@ -685,7 +689,8 @@ func (s *Server) handleTranscribe(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "the recording did not arrive whole")
 		return
 	}
-	res, err := s.transcribeFile(ctx, in, st, lang)
+	words, rp := s.dictionary(ctx, uid)
+	res, err := s.transcribeFile(ctx, in, st, lang, words)
 	if err != nil {
 		writeErr(w, http.StatusUnprocessableEntity, err.Error())
 		return
@@ -696,12 +701,15 @@ func (s *Server) handleTranscribe(w http.ResponseWriter, r *http.Request) {
 			res.Segments[i].Text = speech.ToLatin(res.Segments[i].Text)
 		}
 	}
+	uses := map[int64]int{}
+	applyToResult(res, rp, uses)
+	s.store.CountWordUses(ctx, uid, uses)
 	writeJSON(w, http.StatusOK, res)
 }
 
 // transcribeFile writes out one file now with the person's engine.
-func (s *Server) transcribeFile(ctx context.Context, path string, st store.Settings, lang string) (*speech.Result, error) {
-	prompt := vocabularyPrompt(st.Vocabulary)
+func (s *Server) transcribeFile(ctx context.Context, path string, st store.Settings, lang string, words []store.Word) (*speech.Result, error) {
+	prompt := speechPrompt(st.Vocabulary, words)
 	if st.Engine == "api" {
 		return speech.NewRemote(st.OpenAIBaseURL, st.OpenAIKey, st.SpeechAPI).Transcribe(ctx, path, lang, prompt)
 	}

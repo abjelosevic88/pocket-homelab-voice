@@ -25,9 +25,10 @@ import (
 
 // Segment is one stretch of speech, in milliseconds from the start.
 type Segment struct {
-	Start int64  `json:"s"`
-	End   int64  `json:"e"`
-	Text  string `json:"t"`
+	Start   int64  `json:"s"`
+	End     int64  `json:"e"`
+	Text    string `json:"t"`
+	Speaker string `json:"speaker,omitempty"` // meetings: You | Others
 }
 
 // Result is what a recording said.
@@ -306,6 +307,16 @@ func (l *Local) ffmpeg(ctx context.Context, args ...string) error {
 // ToWAV decodes any recording into 16 kHz mono 16-bit WAV.
 func (l *Local) ToWAV(ctx context.Context, in, out string) error {
 	return l.ffmpeg(ctx, "-i", in, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-f", "wav", out)
+}
+
+// ToWAVChannels decodes a recording into 16 kHz 16-bit WAV keeping its channels (meetings).
+func (l *Local) ToWAVChannels(ctx context.Context, in, out string) error {
+	return l.ffmpeg(ctx, "-i", in, "-vn", "-ar", "16000", "-c:a", "pcm_s16le", "-f", "wav", out)
+}
+
+// ToM4AStereo is ToM4A keeping both channels (a meeting: you and the call).
+func (l *Local) ToM4AStereo(ctx context.Context, in, out string) error {
+	return l.ffmpeg(ctx, "-i", in, "-vn", "-ac", "2", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", "-f", "mp4", out)
 }
 
 // ToM4A makes the AAC copy every browser plays (Safari plays no WebM/Ogg).

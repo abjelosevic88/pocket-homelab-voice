@@ -423,6 +423,9 @@ type exportDoc struct {
 	Memos      []store.Memo      `json:"memos"`
 	Sent       []store.Sent      `json:"sent"`
 	Dictations []store.Dictation `json:"dictations"`
+	Dictionary []store.Word      `json:"dictionary"`
+	// how dictation is polished, per app
+	DictationStyles *store.DictationStyles `json:"dictation_styles,omitempty"`
 }
 
 func (s *Server) export(ctx context.Context, uid int64) exportDoc {
@@ -430,6 +433,9 @@ func (s *Server) export(ctx context.Context, uid int64) exportDoc {
 	doc.Memos, _, _ = s.store.ListMemos(ctx, uid, store.MemoFilter{Oldest: true, Full: true})
 	doc.Sent, _ = s.store.AllSent(ctx, uid)
 	doc.Dictations, _, _, _ = s.store.ListDictations(ctx, uid, store.DictationFilter{Oldest: true})
+	doc.Dictionary, _ = s.store.Words(ctx, uid)
+	styles := s.store.GetDictationStyles(ctx, uid)
+	doc.DictationStyles = &styles
 	for i := range doc.Memos {
 		doc.Memos[i].Sent = []store.Sent{}
 	}
@@ -502,7 +508,7 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) importPocket(ctx context.Context, uid int64, doc exportDoc) map[string]int {
-	counts := map[string]int{"memos": 0, "sent": 0, "dictations": 0}
+	counts := map[string]int{"memos": 0, "sent": 0, "dictations": 0, "dictionary": 0}
 	ids := map[int64]int64{}
 	for _, m := range doc.Memos {
 		old := m.ID
@@ -554,6 +560,34 @@ func (s *Server) importPocket(ctx context.Context, uid int64, doc exportDoc) map
 		}
 		if created, err := s.store.CreateDictation(ctx, uid, &d); err == nil && created {
 			counts["dictations"]++
+		}
+	}
+	for _, wd := range doc.Dictionary {
+		phrase, with, why := cleanWord(wd.Phrase, wd.ReplaceWith)
+		if why != "" {
+			continue
+		}
+		if _, err := s.store.WordByPhrase(ctx, uid, phrase); err == nil {
+			continue
+		}
+		src := wd.Source
+		if src != "learned" {
+			src = "manual"
+		}
+		if err := s.store.AddWord(ctx, uid, &store.Word{Phrase: phrase, ReplaceWith: with, Source: src, Uses: wd.Uses}); err == nil {
+			counts["dictionary"]++
+		}
+	}
+	// styles come along only when none were set here
+	if st := doc.DictationStyles; st != nil && store.ValidStyle(st.Default) {
+		if cur := s.store.GetDictationStyles(ctx, uid); cur.Default == store.StyleNatural && len(cur.Apps) == 0 {
+			ok := []store.AppStyle{}
+			for _, a := range st.Apps {
+				if store.ValidStyle(a.Style) && (a.AppID != "" || a.App != "") {
+					ok = append(ok, a)
+				}
+			}
+			_ = s.store.SaveDictationStyles(ctx, uid, store.DictationStyles{Default: st.Default, Apps: ok})
 		}
 	}
 	return counts

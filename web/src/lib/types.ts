@@ -24,7 +24,7 @@ export type Settings = ConnFields & {
 export type MemoStatus = 'queued' | 'working' | 'done' | 'failed'
 export type Kind = 'note' | 'todo' | 'idea' | 'journal' | 'meeting' | 'shopping' | 'reminder'
 
-export interface Segment { s: number; e: number; t: string }
+export interface Segment { s: number; e: number; t: string; speaker?: 'You' | 'Others' | string }
 
 export interface Action {
   type: 'task' | 'event' | 'journal' | 'expense'
@@ -41,7 +41,7 @@ export interface Memo {
   id: number; title: string; title_set: boolean; recorded_at: string; duration_ms: number; audio_type: string; audio_bytes: number; has_audio: boolean
   peaks: number[]; language: string; status: MemoStatus; error: string; transcript: string; segments: Segment[]; edited: boolean; engine: string
   summary: string; tidy: string; kind: Kind | ''; kind_set: boolean; actions: Action[]; ai_status: '' | 'working' | 'done' | 'failed'; ai_error: string; ai_provider: string
-  tags: string; starred: boolean; filed: boolean; source: string; source_ref: string; audio_gone_at: string; created_at: string; updated_at: string
+  tags: string; starred: boolean; filed: boolean; meeting: boolean; source: string; source_ref: string; audio_gone_at: string; created_at: string; updated_at: string
   sent: Sent[]; url: string; audio_url: string; progress?: Progress; queue?: number
 }
 
@@ -74,3 +74,8 @@ export interface DictationStats {
   apps: { app: string; sessions: number; words: number }[]
   days: { date: string; words: number; sessions: number }[]
 }
+
+export interface Word { id: number; phrase: string; replace_with: string; source: 'manual' | 'learned'; uses: number; created_at: string }
+export type DictationStyle = 'natural' | 'casual' | 'formal' | 'code' | 'none'
+export interface AppStyle { app_id: string; app: string; style: DictationStyle }
+export interface DictationStyles { default: DictationStyle; apps: AppStyle[] }

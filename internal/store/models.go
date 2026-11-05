@@ -51,9 +51,10 @@ func ValidKind(k string) bool {
 
 // Segment is one stretch of speech, in milliseconds.
 type Segment struct {
-	Start int64  `json:"s"`
-	End   int64  `json:"e"`
-	Text  string `json:"t"`
+	Start   int64  `json:"s"`
+	End     int64  `json:"e"`
+	Text    string `json:"t"`
+	Speaker string `json:"speaker,omitempty"` // meetings: You | Others
 }
 
 // Action is something the AI found in a memo that belongs in another app:
@@ -109,7 +110,8 @@ type Memo struct {
 	Tags        string    `json:"tags"`
 	Starred     bool      `json:"starred"`
 	Filed       bool      `json:"filed"`
-	Source      string    `json:"source"` // "" recorded here | upload | import | <app slug>
+	Meeting     bool      `json:"meeting"` // a stereo call recording: you on the left, the others on the right
+	Source      string    `json:"source"`  // "" recorded here | upload | import | <app slug>
 	SourceRef   string    `json:"source_ref"`
 	AudioGoneAt string    `json:"audio_gone_at"` // the recording was let go (Settings → keep recordings)
 	CreatedAt   string    `json:"created_at"`

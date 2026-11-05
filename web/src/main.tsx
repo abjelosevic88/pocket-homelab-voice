@@ -14,6 +14,7 @@ import Memos from './pages/Memos'
 import MemoPage from './pages/MemoPage'
 import Settings from './pages/Settings'
 import Dictation from './pages/Dictation'
+import Dictionary from './pages/Dictionary'
 
 function Gate({ children }: { children: React.ReactNode }) {
   const { status, user } = useApp()
@@ -39,6 +40,7 @@ function App() {
         <Route path="/kind/:kind" element={<Memos view="kind" />} />
         <Route path="/tag/:tag" element={<Memos view="tag" />} />
         <Route path="/dictation" element={<Dictation />} />
+        <Route path="/dictionary" element={<Dictionary />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

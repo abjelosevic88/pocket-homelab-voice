@@ -117,7 +117,9 @@ function Shell() {
     { id: 'starred', label: 'Starred', icon: 'star', hint: 'S', run: () => navigate('/starred') },
     { id: 'dictation', label: 'Dictation history', icon: 'dictation', hint: 'D', keywords: 'launcher mac wispr typed words statistics stats saved', run: () => navigate('/dictation') },
     ...KINDS.map(k => ({ id: 'kind-' + k.id, label: k.plural, icon: k.icon, keywords: 'kind about', run: () => navigate(`/kind/${k.id}`) })),
+    { id: 'dictionary', label: 'Dictionary', icon: 'dictionary', keywords: 'words names spelling replace replacements vocabulary', run: () => navigate('/dictionary') },
     { id: 'settings', label: 'Settings', icon: 'settings', hint: ',', run: () => navigate('/settings') },
+    { id: 'dictation-settings', label: 'Settings: dictation styles', icon: 'dictation', keywords: 'style casual formal code polish app launcher', run: () => navigate('/settings/dictation') },
     { id: 'speech', label: 'Settings: writing out', icon: 'mic', keywords: 'whisper model language words transcribe', run: () => navigate('/settings/speech') },
     { id: 'apps', label: 'Settings: connected apps', icon: 'layers', keywords: 'notes tasks calendar money core', run: () => navigate('/settings/apps') },
     { id: 'notify', label: 'Settings: notifications', icon: 'bell', keywords: 'push', run: () => navigate('/settings/notifications') },
@@ -147,7 +149,7 @@ function Shell() {
   )
 }
 
-const SECTION: Record<string, [string, string]> = { '': ['Inbox', '/'], inbox: ['Inbox', '/'], memos: ['Memos', '/memos'], starred: ['Starred', '/starred'], kind: ['Memos', '/memos'], tag: ['Memos', '/memos'], dictation: ['Dictation', '/dictation'] }
+const SECTION: Record<string, [string, string]> = { '': ['Inbox', '/'], inbox: ['Inbox', '/'], memos: ['Memos', '/memos'], starred: ['Starred', '/starred'], kind: ['Memos', '/memos'], tag: ['Memos', '/memos'], dictation: ['Dictation', '/dictation'], dictionary: ['Dictionary', '/dictionary'] }
 
 function TopBar({ onMenu, onPalette, mobile, compact, sidebarOpen, crumb }: { onMenu: () => void; onPalette: () => void; mobile: boolean; compact: boolean; sidebarOpen: boolean; crumb: string }) {
   const { user, themeMode, setThemeMode, status, setUser } = useApp()

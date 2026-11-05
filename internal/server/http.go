@@ -82,6 +82,15 @@ func (s *Server) Router() http.Handler {
 				r.Delete("/dictations", s.handleClearDictations)
 				r.Get("/dictations/stats", s.handleDictationStats)
 				r.Delete("/dictations/{id}", s.handleDeleteDictation)
+				r.Get("/dictation/styles", s.handleGetStyles)
+				r.Put("/dictation/styles", s.handlePutStyles)
+				r.Post("/rewrite", s.handleRewrite)
+
+				// the dictionary: words to expect and replacements
+				r.Get("/dictionary", s.handleListWords)
+				r.Post("/dictionary", s.handleAddWord)
+				r.Put("/dictionary/{id}", s.handleUpdateWord)
+				r.Delete("/dictionary/{id}", s.handleDeleteWord)
 
 				// writing out
 				r.Get("/speech", s.handleSpeech)

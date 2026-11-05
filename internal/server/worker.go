@@ -149,6 +149,15 @@ func (s *Server) process(ctx context.Context, m *store.Memo) {
 		return
 	}
 	s.applyResult(m, res, st)
+	// the dictionary's replacements, in the words as they were heard
+	if _, rp := s.dictionary(ctx, m.UserID); rp != nil && len(rp.rules) > 0 {
+		uses := map[int64]int{}
+		m.Transcript = rp.apply(m.Transcript, uses)
+		for i := range m.Segments {
+			m.Segments[i].Text = rp.apply(m.Segments[i].Text, nil)
+		}
+		s.store.CountWordUses(ctx, m.UserID, uses)
+	}
 	if err := s.store.SaveMemo(ctx, m.UserID, m); err != nil {
 		s.log.Warn("queue: save", "memo", m.ID, "err", err)
 		return
@@ -173,7 +182,7 @@ func (s *Server) applyResult(m *store.Memo, res *speech.Result, st store.Setting
 		if latin {
 			t = speech.ToLatin(t)
 		}
-		m.Segments = append(m.Segments, store.Segment{Start: sg.Start, End: sg.End, Text: t})
+		m.Segments = append(m.Segments, store.Segment{Start: sg.Start, End: sg.End, Text: t, Speaker: sg.Speaker})
 	}
 	m.Transcript = res.Text
 	if latin {
@@ -222,7 +231,11 @@ func (s *Server) writeOut(ctx context.Context, m *store.Memo, st store.Settings)
 		if !speech.Playable(m.AudioType) {
 			name := strings.TrimSuffix(m.Audio, filepath.Ext(m.Audio)) + ".m4a"
 			out := s.audioPath(m.UserID, name)
-			if err := s.speech.ToM4A(ctx, path, out); err == nil {
+			conv := s.speech.ToM4A
+			if m.Meeting {
+				conv = s.speech.ToM4AStereo
+			}
+			if err := conv(ctx, path, out); err == nil {
 				if out != path {
 					_ = os.Remove(path)
 				}
@@ -242,29 +255,43 @@ func (s *Server) writeOut(ctx context.Context, m *store.Memo, st store.Settings)
 		}
 	}
 	lang := m.Language
-	prompt := vocabularyPrompt(st.Vocabulary)
+	words, _ := s.dictionary(ctx, m.UserID)
+	prompt := speechPrompt(st.Vocabulary, words)
+	var run func(file string, progress func(int)) (*speech.Result, error)
 	if st.Engine == "api" {
 		s.setProgress(m.ID, "writing", -1)
-		key := st.OpenAIKey
-		return speech.NewRemote(st.OpenAIBaseURL, key, st.SpeechAPI).Transcribe(ctx, path, lang, prompt)
-	}
-	model := s.speechModel(ctx)
-	if !s.speech.HasEngine(model) {
-		return nil, noEngine(model)
-	}
-	if !hasWAV {
-		if !strings.HasSuffix(strings.ToLower(path), ".wav") {
-			return nil, errors.New("ffmpeg is not installed here, so only WAV recordings can be written out")
+		remote := speech.NewRemote(st.OpenAIBaseURL, st.OpenAIKey, st.SpeechAPI)
+		run = func(file string, _ func(int)) (*speech.Result, error) {
+			return remote.Transcribe(ctx, file, lang, prompt)
 		}
-		wav = path
-	}
-	if !s.speech.ModelReady(model) {
-		if err := s.fetchModel(ctx, m.ID, model); err != nil {
-			return nil, err
+		if !m.Meeting || !hasWAV {
+			return run(path, nil)
+		}
+	} else {
+		model := s.speechModel(ctx)
+		if !s.speech.HasEngine(model) {
+			return nil, noEngine(model)
+		}
+		if !hasWAV {
+			if !strings.HasSuffix(strings.ToLower(path), ".wav") {
+				return nil, errors.New("ffmpeg is not installed here, so only WAV recordings can be written out")
+			}
+			wav = path
+		}
+		if !s.speech.ModelReady(model) {
+			if err := s.fetchModel(ctx, m.ID, model); err != nil {
+				return nil, err
+			}
+		}
+		s.setProgress(m.ID, "writing", 0)
+		run = func(file string, progress func(int)) (*speech.Result, error) {
+			return s.speech.Transcribe(ctx, file, model, lang, prompt, progress)
 		}
 	}
-	s.setProgress(m.ID, "writing", 0)
-	return s.speech.Transcribe(ctx, wav, model, lang, prompt, func(p int) { s.setProgress(m.ID, "writing", p) })
+	if m.Meeting && hasWAV {
+		return s.writeOutMeeting(ctx, m, path, wav, run)
+	}
+	return run(wav, func(p int) { s.setProgress(m.ID, "writing", p) })
 }
 
 // fetchModel downloads the speech model, showing its progress on the memo.

@@ -12,20 +12,21 @@ import (
 
 const memoCols = `id, user_id, title, title_set, recorded_at, duration_ms, audio, audio_type, audio_bytes, peaks, language, status, error,
 	transcript, segments, edited, engine, summary, tidy, kind, kind_set, actions, ai_status, ai_error, ai_provider, tags, starred, filed,
-	source, source_ref, audio_gone_at, created_at, updated_at`
+	source, source_ref, audio_gone_at, meeting, created_at, updated_at`
 
 type scanner interface{ Scan(...any) error }
 
 func scanMemo(r scanner) (*Memo, error) {
 	var m Memo
-	var titleSet, edited, kindSet, starred, filed int
+	var titleSet, edited, kindSet, starred, filed, meeting int
 	var peaks, segs, actions string
 	if err := r.Scan(&m.ID, &m.UserID, &m.Title, &titleSet, &m.RecordedAt, &m.DurationMS, &m.Audio, &m.AudioType, &m.AudioBytes, &peaks, &m.Language,
 		&m.Status, &m.Error, &m.Transcript, &segs, &edited, &m.Engine, &m.Summary, &m.Tidy, &m.Kind, &kindSet, &actions, &m.AIStatus, &m.AIError,
-		&m.AIProvider, &m.Tags, &starred, &filed, &m.Source, &m.SourceRef, &m.AudioGoneAt, &m.CreatedAt, &m.UpdatedAt); err != nil {
+		&m.AIProvider, &m.Tags, &starred, &filed, &m.Source, &m.SourceRef, &m.AudioGoneAt, &meeting, &m.CreatedAt, &m.UpdatedAt); err != nil {
 		return nil, err
 	}
 	m.TitleSet, m.Edited, m.KindSet, m.Starred, m.Filed = titleSet == 1, edited == 1, kindSet == 1, starred == 1, filed == 1
+	m.Meeting = meeting == 1
 	m.HasAudio = m.Audio != ""
 	_ = json.Unmarshal([]byte(peaks), &m.Peaks)
 	_ = json.Unmarshal([]byte(segs), &m.Segments)
@@ -74,10 +75,10 @@ func (s *Store) CreateMemo(ctx context.Context, uid int64, m *Memo) error {
 	now := Now()
 	res, err := s.DB.ExecContext(ctx, `INSERT INTO memos (user_id, title, title_set, recorded_at, duration_ms, audio, audio_type, audio_bytes, peaks, language, status, error,
 		transcript, segments, edited, engine, summary, tidy, kind, kind_set, actions, ai_status, ai_error, ai_provider, tags, starred, filed, search,
-		source, source_ref, audio_gone_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		source, source_ref, audio_gone_at, meeting, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		uid, m.Title, boolInt(m.TitleSet), m.RecordedAt, m.DurationMS, m.Audio, m.AudioType, m.AudioBytes, toJSON(m.Peaks), m.Language, m.Status, m.Error,
 		m.Transcript, toJSON(m.Segments), boolInt(m.Edited), m.Engine, m.Summary, m.Tidy, m.Kind, boolInt(m.KindSet), toJSON(m.Actions), m.AIStatus, m.AIError,
-		m.AIProvider, m.Tags, boolInt(m.Starred), boolInt(m.Filed), searchText(m), m.Source, m.SourceRef, m.AudioGoneAt, now, now)
+		m.AIProvider, m.Tags, boolInt(m.Starred), boolInt(m.Filed), searchText(m), m.Source, m.SourceRef, m.AudioGoneAt, boolInt(m.Meeting), now, now)
 	if err != nil {
 		return conflict(err)
 	}
@@ -96,10 +97,10 @@ func (s *Store) SaveMemo(ctx context.Context, uid int64, m *Memo) error {
 	m.UpdatedAt = Now()
 	res, err := s.DB.ExecContext(ctx, `UPDATE memos SET title=?, title_set=?, recorded_at=?, duration_ms=?, audio=?, audio_type=?, audio_bytes=?, peaks=?, language=?,
 		status=?, error=?, transcript=?, segments=?, edited=?, engine=?, summary=?, tidy=?, kind=?, kind_set=?, actions=?, ai_status=?, ai_error=?, ai_provider=?,
-		tags=?, starred=?, filed=?, search=?, audio_gone_at=?, updated_at=? WHERE id=? AND user_id=?`,
+		tags=?, starred=?, filed=?, search=?, audio_gone_at=?, meeting=?, updated_at=? WHERE id=? AND user_id=?`,
 		m.Title, boolInt(m.TitleSet), m.RecordedAt, m.DurationMS, m.Audio, m.AudioType, m.AudioBytes, toJSON(m.Peaks), m.Language,
 		m.Status, m.Error, m.Transcript, toJSON(m.Segments), boolInt(m.Edited), m.Engine, m.Summary, m.Tidy, m.Kind, boolInt(m.KindSet), toJSON(m.Actions),
-		m.AIStatus, m.AIError, m.AIProvider, m.Tags, boolInt(m.Starred), boolInt(m.Filed), searchText(m), m.AudioGoneAt, m.UpdatedAt, m.ID, uid)
+		m.AIStatus, m.AIError, m.AIProvider, m.Tags, boolInt(m.Starred), boolInt(m.Filed), searchText(m), m.AudioGoneAt, boolInt(m.Meeting), m.UpdatedAt, m.ID, uid)
 	if err != nil {
 		return err
 	}
