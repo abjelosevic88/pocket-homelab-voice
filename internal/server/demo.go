@@ -241,6 +241,9 @@ func (s *Server) seedDemo(ctx context.Context, uid int64) error {
 			}
 		}
 	}
+	if err := s.seedDemoMeeting(ctx, uid, rng); err != nil {
+		return err
+	}
 	n, err := s.seedDemoDictations(ctx, uid, rng)
 	if err != nil {
 		return err

@@ -602,7 +602,7 @@ button.spk:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c, var(-
   color: color-mix(in srgb, var(--accent) 80%, var(--text)); background: color-mix(in srgb, var(--accent) 13%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent); }
 .tag-badge a { color: inherit; text-decoration: none; }
-.tag-badge a:hover { text-decoration: underline; }
+.tag-badge a:hover { text-decoration: none; color: var(--text); }
 .tag-badge button { display: grid; place-items: center; width: 20px; height: 20px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; opacity: .65; }
 .tag-badge button:hover { opacity: 1; background: color-mix(in srgb, var(--accent) 22%, transparent); }
 .tag-entry { position: relative; flex: 1; min-width: 110px; }

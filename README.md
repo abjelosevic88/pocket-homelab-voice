@@ -30,6 +30,9 @@
   </tr>
 </table>
 
+<p align="center"><img src="docs/screenshots/desktop-meeting.png" width="900" alt="A meeting: a lane and a chip per voice under the waveform, and Who's who with a voice named by you, one recognised, one asked about and one with a name heard in the call"></p>
+<p align="center"><sub>A meeting: each voice on the call gets its lane and its share of the talk. Name a voice once and the next meeting knows it; when Voice is not sure it asks, and it suggests names it heard in the conversation.</sub></p>
+
 ## What it does
 
 - **Record** in the browser on your phone or computer: a calm level line, pause and resume, the screen stays on. Stop, and it is saved and written out. A recording that cannot be sent is never thrown away: try again, or save the file.
