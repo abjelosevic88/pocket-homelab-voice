@@ -13,7 +13,8 @@ Environment variables; every one has a default. Personal settings (language, wor
 | `MAX_BODY_BYTES` | `67108864` | Largest JSON request, e.g. an export being imported (64 MB) |
 | `WHISPER_BIN`, `PARAKEET_BIN`, `FFMPEG_BIN` | `whisper-cli`, `parakeet-cli`, `ffmpeg` | All in the Docker image (whisper.cpp, with Parakeet, on amd64 and arm64) |
 | `WHISPER_MODEL` | `large-v3-turbo-q5_0` | The memo model until an admin picks one in Settings → Writing out: `parakeet-tdt-0.6b-v3-q8_0`, `base`, `small`, `large-v3-turbo-q5_0`. Dictation (POST /transcribe) uses Parakeet unless an admin picks another |
-| `WHISPER_THREADS` | half the cores, 1–8 | Threads whisper uses |
+| `WHISPER_THREADS` | half the cores, 1–4 | Threads for dictation (someone is waiting). More than 4 made whisper.cpp no faster on a 6-core i5, only hotter |
+| `WHISPER_BG_THREADS` | `WHISPER_THREADS` default − 1 | Threads for memos and meetings, run with `nice -n 19` so they only take CPU nothing else wants |
 | `MODELS_DIR`, `MODEL_BASE_URL` | `$DATA_DIR/models`, Hugging Face `ggerganov/whisper.cpp` | Where models are kept and downloaded from (a mirror works) |
 | `TZ` | – | Time zone for "tomorrow" in memos and the morning message |
 | `AUTH_MODE` | `local` | `local` (accounts), `proxy` (trust `AUTH_PROXY_HEADER`/`AUTH_PROXY_EMAIL_HEADER`), `none` |

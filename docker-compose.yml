@@ -15,7 +15,8 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       NOTIFY_URL: ${NOTIFY_URL:-}
       # WHISPER_MODEL: large-v3-turbo-q5_0   # base | small | large-v3-turbo-q5_0 (downloaded into /data/models on first use)
-      # WHISPER_THREADS: "4"
+      # WHISPER_THREADS: "4"     # dictation
+      # WHISPER_BG_THREADS: "3"  # memos and meetings, at nice 19
       # Pocket Core: one sign-in, Pocket AI, and Notes/Tasks/Calendar/Money through app links.
       # CORE_URL: http://pocket-core:8080
       # CORE_REGISTRATION_KEY: ${CORE_REGISTRATION_KEY}

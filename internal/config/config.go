@@ -64,7 +64,8 @@ type Config struct {
 	ParakeetBin    string
 	FFmpegBin      string
 	WhisperModel   string // the box default until an admin picks one in Settings
-	WhisperThreads int
+	WhisperThreads int // dictation
+	BackThreads    int // memos and meetings, at the lowest priority
 	ModelsDir      string
 	ModelBaseURL   string
 	AudioDir       string
@@ -172,6 +173,7 @@ func Load() (*Config, error) {
 		FFmpegBin:      env("FFMPEG_BIN", "ffmpeg"),
 		WhisperModel:   env("WHISPER_MODEL", ""),
 		WhisperThreads: envInt("WHISPER_THREADS", 0),
+		BackThreads:    envInt("WHISPER_BG_THREADS", 0),
 		ModelsDir:      env("MODELS_DIR", dataDir+"/models"),
 		ModelBaseURL:   strings.TrimRight(env("MODEL_BASE_URL", "https://huggingface.co/ggerganov/whisper.cpp/resolve/main"), "/"),
 		AudioDir:       env("AUDIO_DIR", dataDir+"/audio"),

@@ -89,7 +89,10 @@ type Local struct {
 	Dir       string // where the models are kept
 	BaseURL   string // where models are downloaded from
 	UserAgent string
-	Threads   int
+	Threads   int // dictation: someone is waiting
+	// BackThreads is for memos and meetings, written out in the background at
+	// the lowest priority so the box stays free for everything else.
+	BackThreads int
 
 	mu   sync.Mutex
 	dl   map[string]*Download
@@ -106,17 +109,62 @@ type Download struct {
 	done  chan struct{}
 }
 
-// DefaultThreads is half the cores, 1 to 8: whisper is quickest on real cores
-// and the box keeps some for everything else.
+// DefaultThreads is half the cores, 1 to 4: past 4 whisper.cpp gets no faster
+// on a 6-core i5 (6 threads took 850% CPU and were slower than 4).
 func DefaultThreads() int {
 	n := runtime.NumCPU() / 2
 	if n < 1 {
 		n = 1
 	}
-	if n > 8 {
-		n = 8
+	if n > 4 {
+		n = 4
 	}
 	return n
+}
+
+// DefaultBackThreads is one fewer than DefaultThreads, at least 1.
+func DefaultBackThreads() int {
+	if n := DefaultThreads() - 1; n > 1 {
+		return n
+	}
+	return 1
+}
+
+type backgroundKey struct{}
+
+// Background marks work nobody is waiting for (memos, meetings): it runs on
+// BackThreads at the lowest CPU priority.
+func Background(ctx context.Context) context.Context {
+	return context.WithValue(ctx, backgroundKey{}, true)
+}
+
+func isBackground(ctx context.Context) bool {
+	b, _ := ctx.Value(backgroundKey{}).(bool)
+	return b
+}
+
+// threads is how many threads a run gets.
+func (l *Local) threads(ctx context.Context) int {
+	if isBackground(ctx) {
+		if l.BackThreads > 0 {
+			return l.BackThreads
+		}
+		return DefaultBackThreads()
+	}
+	if l.Threads > 0 {
+		return l.Threads
+	}
+	return DefaultThreads()
+}
+
+// command runs bin, under `nice -n 19` when the work is in the background.
+func command(ctx context.Context, bin string, args ...string) *exec.Cmd {
+	if isBackground(ctx) {
+		if nice := look("nice"); nice != "" {
+			return exec.CommandContext(ctx, nice, append([]string{"-n", "19", bin}, args...)...)
+		}
+	}
+	return exec.CommandContext(ctx, bin, args...)
 }
 
 func look(bin string) string {
@@ -289,7 +337,7 @@ func (l *Local) ffmpeg(ctx context.Context, args ...string) error {
 		return errors.New("ffmpeg is not installed")
 	}
 	var stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, bin, append([]string{"-nostdin", "-hide_banner", "-loglevel", "error", "-y"}, args...)...)
+	cmd := command(ctx, bin, append([]string{"-nostdin", "-hide_banner", "-loglevel", "error", "-y"}, args...)...)
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		msg := strings.TrimSpace(stderr.String())
@@ -368,17 +416,14 @@ func (l *Local) Transcribe(ctx context.Context, wav string, m Model, lang, promp
 	if lang == "" {
 		lang = "auto"
 	}
-	threads := l.Threads
-	if threads <= 0 {
-		threads = DefaultThreads()
-	}
+	threads := l.threads(ctx)
 	outBase := strings.TrimSuffix(wav, filepath.Ext(wav)) + "-words"
 	defer os.Remove(outBase + ".json")
 	args := []string{"-m", l.ModelPath(m), "-f", wav, "-l", lang, "-t", strconv.Itoa(threads), "-oj", "-of", outBase, "-pp", "-np", "-sns"}
 	if p := strings.TrimSpace(prompt); p != "" {
 		args = append(args, "--prompt", p)
 	}
-	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd := command(ctx, bin, args...)
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return nil, err
@@ -496,12 +541,9 @@ func (l *Local) parakeet(ctx context.Context, wav string, m Model) (*Result, err
 	}
 	l.runs.Lock()
 	defer l.runs.Unlock()
-	threads := l.Threads
-	if threads <= 0 {
-		threads = DefaultThreads()
-	}
+	threads := l.threads(ctx)
 	var stdout, stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, bin, "-m", l.ModelPath(m), "-f", wav, "-t", strconv.Itoa(threads), "-ps")
+	cmd := command(ctx, bin, "-m", l.ModelPath(m), "-f", wav, "-t", strconv.Itoa(threads), "-ps")
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
