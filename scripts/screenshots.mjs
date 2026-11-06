@@ -62,6 +62,19 @@ const memoId = async (page, q) => page.evaluate(t => fetch('/api/v1/search?q=' +
   await ctx.close()
 }
 
+// ---- a meeting, dark ----
+{
+  const { ctx, page } = await session({ dark: true })
+  const call = await memoId(page, 'launch week')
+  await go(page, `/memos/${call}`, 2000)
+  const meeting = await page.content()
+  assert.ok(meeting.includes('Who\'s who') && meeting.includes('Is this <b>Nina</b>?') && meeting.includes('talk-chip'), 'a meeting shows its voices and who they are')
+  await shot(page, 'desktop-meeting')
+  await go(page, '/people', 800)
+  assert.ok((await page.content()).includes('Lejla'), 'People lists the named voices')
+  await ctx.close()
+}
+
 // ---- phone ----
 {
   const { ctx, page } = await session({ phone: true })

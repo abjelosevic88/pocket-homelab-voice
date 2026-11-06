@@ -45,7 +45,7 @@ export function TagInput({ value, onChange, placeholder = 'Add a tag' }: { value
     <div className="tag-input" onClick={e => { if (e.target === e.currentTarget) input.current?.focus() }}>
       {tags.map(t => (
         <span key={t} className="tag-badge">
-          <Link to={`/tag/${encodeURIComponent(t)}`} title={`Memos tagged ${t}`}>#{t}</Link>
+          <Link to={`/tag/${encodeURIComponent(t)}`} title={`Memos tagged ${t}`}>{t}</Link>
           <button type="button" onClick={() => remove(t)} aria-label={`Take off ${t}`} title="Take off"><Icon name="x" size={12} strokeWidth={2.4} /></button>
         </span>
       ))}
@@ -56,7 +56,7 @@ export function TagInput({ value, onChange, placeholder = 'Add a tag' }: { value
           onFocus={() => setOpen(true)} onBlur={() => { setOpen(false); if (q) add(text) }} onKeyDown={key} />
         {shown && <ul className="tag-suggest" role="listbox">{suggest.map((t, i) => (
           <li key={t} role="option" aria-selected={i === hi} className={i === hi ? 'on' : ''}
-            onMouseDown={e => { e.preventDefault(); add(t) }} onMouseEnter={() => setHi(i)}>#{t}<span className="muted small">{known.find(k => k.tag === t)?.count}</span></li>
+            onMouseDown={e => { e.preventDefault(); add(t) }} onMouseEnter={() => setHi(i)}>{t}<span className="muted small">{known.find(k => k.tag === t)?.count}</span></li>
         ))}</ul>}
       </span>
     </div>
