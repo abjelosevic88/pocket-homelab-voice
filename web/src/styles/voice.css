@@ -593,3 +593,22 @@ button.spk:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c, var(-
 .topic-chip { font: inherit; font-size: 12.5px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topic-chip:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); color: var(--text); }
 .turns + .turns { margin-top: 10px; }
+
+/* tags as badges */
+.tag-input { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 38px; padding: 5px 8px; max-width: 520px; cursor: text;
+  border: 1px solid var(--border-strong, var(--border)); border-radius: var(--radius-sm); background: var(--surface); }
+.tag-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.tag-badge { display: inline-flex; align-items: center; gap: 2px; height: 26px; padding: 0 4px 0 10px; border-radius: 99px; font-size: 13px; font-weight: 600;
+  color: color-mix(in srgb, var(--accent) 80%, var(--text)); background: color-mix(in srgb, var(--accent) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent); }
+.tag-badge a { color: inherit; text-decoration: none; }
+.tag-badge a:hover { text-decoration: underline; }
+.tag-badge button { display: grid; place-items: center; width: 20px; height: 20px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; opacity: .65; }
+.tag-badge button:hover { opacity: 1; background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.tag-entry { position: relative; flex: 1; min-width: 110px; }
+.tag-entry input { width: 100%; height: 26px; padding: 0 4px; border: 0; background: transparent; box-shadow: none; outline: none; }
+.tag-entry input:focus { box-shadow: none; }
+.tag-suggest { position: absolute; z-index: 30; top: calc(100% + 6px); left: -4px; min-width: 200px; margin: 0; padding: 4px; list-style: none;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg); }
+.tag-suggest li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 13.5px; }
+.tag-suggest li.on { background: var(--surface-2); }

@@ -8,6 +8,7 @@ import { announceChange } from '../lib/data'
 import type { Action, Memo, Segment } from '../lib/types'
 import { hasSpeakers, inRange, length, parsePart, partParam, partText, speakerSpans, voices, within, type Range, type Voice, type Who } from '../lib/part'
 import { WhoCard } from '../components/Speakers'
+import { TagInput } from '../components/TagInput'
 import { fmtDate, fmtISOTime } from '../lib/format'
 import { APPS, KINDS, clock, kindIcon, langName, localDay, sentLabel, statusLine } from '../lib/voice'
 import { useCrumb } from '../components/Layout'
@@ -450,8 +451,8 @@ function MemoFacts({ memo: m, onSave }: { memo: Memo; onSave: (p: Partial<Memo>)
       <div className="card-body facts">
         <label className="fact-row"><span className="muted small">About</span>
           <Select ariaLabel="What it is about" value={m.kind} onChange={v => onSave({ kind: v as Memo['kind'] })} options={KINDS.map(k => ({ value: k.id, label: k.label }))} placeholder="Not set" clearLabel="Not set" /></label>
-        <label className="fact-row"><span className="muted small">Tags</span>
-          <input value={tags} onChange={e => setTags(e.target.value)} onBlur={() => { if (tags !== m.tags) onSave({ tags }) }} placeholder="work, family" /></label>
+        <div className="fact-row"><span className="muted small">Tags</span>
+          <TagInput value={tags} onChange={t => { setTags(t); if (t !== m.tags) onSave({ tags: t }) }} placeholder="work, family" /></div>
         <p className="muted small">{m.engine && m.engine !== 'typed' ? `Written out by ${m.engine.replace(/^whisper /, 'whisper.cpp (').replace(/^api /, 'the API (')}${m.engine.startsWith('whisper') || m.engine.startsWith('api') ? ')' : ''}` : m.engine === 'typed' ? 'Typed' : ''}
           {m.ai_provider && `${m.engine ? ' · ' : ''}tidied up by ${m.ai_provider === 'pocket' ? 'Pocket AI' : 'your OpenAI key'}`}
           {m.has_audio && m.audio_bytes > 0 && ` · ${(m.audio_bytes / 1048576).toFixed(1)} MB`}</p>
