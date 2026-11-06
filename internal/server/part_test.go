@@ -65,7 +65,7 @@ func TestPartOfAMeeting(t *testing.T) {
 
 func TestPartText(t *testing.T) {
 	segs := []store.Segment{{Start: 0, End: 1000, Text: "One."}, {Start: 1000, End: 2000, Text: " Two. "}, {Start: 65000, End: 66000, Text: "Three."}}
-	if got := partText(partSegments(segs, 500, 70000)); got != "[0:00] One. Two. Three." {
+	if got := partText(partSegments(segs, 500, 70000), func(k string) string { return k }); got != "[0:00] One. Two. Three." {
 		t.Fatalf("partText: %q", got)
 	}
 	if got := partSegments(segs, 2000, 65000); len(got) != 0 {

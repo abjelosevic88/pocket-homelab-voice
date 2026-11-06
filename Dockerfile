@@ -24,10 +24,18 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
 # ---------- 3. runtime ----------
 # ffmpeg reads any recording; whisper.cpp writes it out on this machine.
 # Alpine packages whisper.cpp for amd64 and arm64; on armv7 memos are written
-# out through an API instead (Settings → Writing out).
+# out through an API instead (Settings → Writing out). python3 with numpy and
+# onnxruntime runs the speaker models that tell the voices of a meeting apart
+# (amd64 and arm64 too; sympy, which onnxruntime only needs to quantise
+# models, and the test suites are left out: ~60 MB).
 FROM alpine:3.24
 RUN apk add --no-cache ca-certificates tzdata curl ffmpeg \
  && (apk add --no-cache whisper.cpp || echo "whisper.cpp is not packaged for this architecture") \
+ && (apk add --no-cache python3 py3-numpy py3-onnxruntime \
+     && rm -rf /usr/lib/python3*/site-packages/sympy /usr/lib/python3*/site-packages/mpmath \
+     && find /usr/lib/python3*/site-packages -type d -name tests -prune -exec rm -rf {} + \
+     && python3 -c "import numpy, onnxruntime" \
+     || echo "onnxruntime is not packaged for this architecture: no speaker finding") \
  && addgroup -g 1000 app && adduser -u 1000 -G app -D -h /data app
 COPY --from=build /out/pocket-voice /usr/local/bin/pocket-voice
 ENV DATA_DIR=/data PORT=8080 HOST=0.0.0.0

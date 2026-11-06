@@ -12,17 +12,18 @@ import (
 
 const memoCols = `id, user_id, title, title_set, recorded_at, duration_ms, audio, audio_type, audio_bytes, peaks, language, status, error,
 	transcript, segments, edited, engine, summary, tidy, kind, kind_set, actions, ai_status, ai_error, ai_provider, tags, starred, filed,
-	source, source_ref, audio_gone_at, meeting, created_at, updated_at, audio_at, audio_away`
+	source, source_ref, audio_gone_at, meeting, created_at, updated_at, audio_at, audio_away, speakers, speaker_voices, speakers_status, speakers_error`
 
 type scanner interface{ Scan(...any) error }
 
 func scanMemo(r scanner) (*Memo, error) {
 	var m Memo
 	var titleSet, edited, kindSet, starred, filed, meeting int
-	var peaks, segs, actions string
+	var peaks, segs, actions, spk, voices string
 	if err := r.Scan(&m.ID, &m.UserID, &m.Title, &titleSet, &m.RecordedAt, &m.DurationMS, &m.Audio, &m.AudioType, &m.AudioBytes, &peaks, &m.Language,
 		&m.Status, &m.Error, &m.Transcript, &segs, &edited, &m.Engine, &m.Summary, &m.Tidy, &m.Kind, &kindSet, &actions, &m.AIStatus, &m.AIError,
-		&m.AIProvider, &m.Tags, &starred, &filed, &m.Source, &m.SourceRef, &m.AudioGoneAt, &meeting, &m.CreatedAt, &m.UpdatedAt, &m.AudioAt, &m.AudioAway); err != nil {
+		&m.AIProvider, &m.Tags, &starred, &filed, &m.Source, &m.SourceRef, &m.AudioGoneAt, &meeting, &m.CreatedAt, &m.UpdatedAt, &m.AudioAt, &m.AudioAway,
+		&spk, &voices, &m.SpeakersStatus, &m.SpeakersError); err != nil {
 		return nil, err
 	}
 	m.TitleSet, m.Edited, m.KindSet, m.Starred, m.Filed = titleSet == 1, edited == 1, kindSet == 1, starred == 1, filed == 1
@@ -31,6 +32,11 @@ func scanMemo(r scanner) (*Memo, error) {
 	_ = json.Unmarshal([]byte(peaks), &m.Peaks)
 	_ = json.Unmarshal([]byte(segs), &m.Segments)
 	_ = json.Unmarshal([]byte(actions), &m.Actions)
+	_ = json.Unmarshal([]byte(spk), &m.Speakers)
+	_ = json.Unmarshal([]byte(voices), &m.SpeakerVoices)
+	if m.Speakers == nil {
+		m.Speakers = []Speaker{}
+	}
 	if m.Peaks == nil {
 		m.Peaks = []int{}
 	}
@@ -60,6 +66,12 @@ func (m *Memo) clean() {
 	if m.Actions == nil {
 		m.Actions = []Action{}
 	}
+	if m.Speakers == nil {
+		m.Speakers = []Speaker{}
+	}
+	if m.SpeakerVoices == nil {
+		m.SpeakerVoices = map[string][]float32{}
+	}
 	if m.RecordedAt == "" {
 		m.RecordedAt = Now()
 	}
@@ -75,10 +87,12 @@ func (s *Store) CreateMemo(ctx context.Context, uid int64, m *Memo) error {
 	now := Now()
 	res, err := s.DB.ExecContext(ctx, `INSERT INTO memos (user_id, title, title_set, recorded_at, duration_ms, audio, audio_type, audio_bytes, peaks, language, status, error,
 		transcript, segments, edited, engine, summary, tidy, kind, kind_set, actions, ai_status, ai_error, ai_provider, tags, starred, filed, search,
-		source, source_ref, audio_gone_at, meeting, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		source, source_ref, audio_gone_at, meeting, created_at, updated_at, speakers, speaker_voices, speakers_status, speakers_error)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		uid, m.Title, boolInt(m.TitleSet), m.RecordedAt, m.DurationMS, m.Audio, m.AudioType, m.AudioBytes, toJSON(m.Peaks), m.Language, m.Status, m.Error,
 		m.Transcript, toJSON(m.Segments), boolInt(m.Edited), m.Engine, m.Summary, m.Tidy, m.Kind, boolInt(m.KindSet), toJSON(m.Actions), m.AIStatus, m.AIError,
-		m.AIProvider, m.Tags, boolInt(m.Starred), boolInt(m.Filed), searchText(m), m.Source, m.SourceRef, m.AudioGoneAt, boolInt(m.Meeting), now, now)
+		m.AIProvider, m.Tags, boolInt(m.Starred), boolInt(m.Filed), searchText(m), m.Source, m.SourceRef, m.AudioGoneAt, boolInt(m.Meeting), now, now,
+		toJSON(m.Speakers), toJSON(m.SpeakerVoices), m.SpeakersStatus, m.SpeakersError)
 	if err != nil {
 		return conflict(err)
 	}
@@ -97,10 +111,11 @@ func (s *Store) SaveMemo(ctx context.Context, uid int64, m *Memo) error {
 	m.UpdatedAt = Now()
 	res, err := s.DB.ExecContext(ctx, `UPDATE memos SET title=?, title_set=?, recorded_at=?, duration_ms=?, audio=?, audio_type=?, audio_bytes=?, peaks=?, language=?,
 		status=?, error=?, transcript=?, segments=?, edited=?, engine=?, summary=?, tidy=?, kind=?, kind_set=?, actions=?, ai_status=?, ai_error=?, ai_provider=?,
-		tags=?, starred=?, filed=?, search=?, audio_gone_at=?, meeting=?, updated_at=? WHERE id=? AND user_id=?`,
+		tags=?, starred=?, filed=?, search=?, audio_gone_at=?, meeting=?, speakers=?, speaker_voices=?, speakers_status=?, speakers_error=?, updated_at=? WHERE id=? AND user_id=?`,
 		m.Title, boolInt(m.TitleSet), m.RecordedAt, m.DurationMS, m.Audio, m.AudioType, m.AudioBytes, toJSON(m.Peaks), m.Language,
 		m.Status, m.Error, m.Transcript, toJSON(m.Segments), boolInt(m.Edited), m.Engine, m.Summary, m.Tidy, m.Kind, boolInt(m.KindSet), toJSON(m.Actions),
-		m.AIStatus, m.AIError, m.AIProvider, m.Tags, boolInt(m.Starred), boolInt(m.Filed), searchText(m), m.AudioGoneAt, boolInt(m.Meeting), m.UpdatedAt, m.ID, uid)
+		m.AIStatus, m.AIError, m.AIProvider, m.Tags, boolInt(m.Starred), boolInt(m.Filed), searchText(m), m.AudioGoneAt, boolInt(m.Meeting),
+		toJSON(m.Speakers), toJSON(m.SpeakerVoices), m.SpeakersStatus, m.SpeakersError, m.UpdatedAt, m.ID, uid)
 	if err != nil {
 		return err
 	}
@@ -522,7 +537,7 @@ func (s *Store) AudioToMove(ctx context.Context, uid int64, at string, limit int
 	return out, rows.Err()
 }
 
-// AudioPlaces counts uid's recordings by where they are ('' = this box).
+// AudioPlaces counts uid's recordings by where they are (” = this box).
 func (s *Store) AudioPlaces(ctx context.Context, uid int64) map[string]AudioPlace {
 	out := map[string]AudioPlace{}
 	rows, err := s.DB.QueryContext(ctx, `SELECT audio_at, COUNT(*), COALESCE(SUM(audio_bytes),0) FROM memos WHERE user_id = ? AND audio <> '' GROUP BY audio_at`, uid)

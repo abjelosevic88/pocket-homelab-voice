@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -22,7 +23,7 @@ const aiPart = `You sum up one part of a longer voice recording, written out by 
 
 Rules:
 - Write in the language of the recording (Bosnian, Croatian and Serbian in Latin letters). Never translate.
-- In a meeting, lines start with who spoke: "You:" is the person you are writing for, "Others:" the other people on the call. Speak to the person as "you".
+- In a meeting, lines start with who spoke: "You:" is the person you are writing for; the other labels are the other people on the call, by name when known, else "Speaker 1", "Speaker 2", … (or "Others"). Speak to the person as "you"; call the others by their label.
 - "title": what this part is about, at most 6 words, no full stop.
 - "summary": two to four plain sentences: what was discussed in this part and where it got to.
 - "points": up to five short lines worth remembering: decisions, things the person said they would do or was asked to do, numbers, names. Empty when there are none.
@@ -48,7 +49,7 @@ func partSegments(segs []store.Segment, from, to int64) []store.Segment {
 
 // partText writes the segments as lines with their time and, in a meeting,
 // who spoke: "[12:30] You: …".
-func partText(segs []store.Segment) string {
+func partText(segs []store.Segment, label func(string) string) string {
 	var b strings.Builder
 	cur := "\x00"
 	for _, sg := range segs {
@@ -59,7 +60,7 @@ func partText(segs []store.Segment) string {
 			}
 			b.WriteString("[" + clock(sg.Start) + "] ")
 			if sg.Speaker != "" {
-				b.WriteString(sg.Speaker + ": ")
+				b.WriteString(label(sg.Speaker) + ": ")
 			}
 			cur = sg.Speaker
 		} else {
@@ -102,7 +103,7 @@ func (s *Server) handlePart(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, firstNonEmpty(why, "no AI is connected (Settings → AI)"))
 		return
 	}
-	text := partText(segs)
+	text := partText(segs, func(k string) string { return speakerLabel(m, k) })
 	if utf8.RuneCountInString(text) > 24000 {
 		text = string([]rune(text)[:24000])
 	}
@@ -117,7 +118,7 @@ func (s *Server) handlePart(w http.ResponseWriter, r *http.Request) {
 
 	system := aiPart
 	if !m.Meeting {
-		system = strings.Replace(system, "- In a meeting, lines start with who spoke: \"You:\" is the person you are writing for, \"Others:\" the other people on the call. Speak to the person as \"you\".\n", "- It is the person's own memo: speak to them as \"you\".\n", 1)
+		system = regexp.MustCompile(`(?m)^- In a meeting, .*\n`).ReplaceAllString(system, "- It is the person's own memo: speak to them as \"you\".\n")
 	}
 	actx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()

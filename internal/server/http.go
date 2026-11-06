@@ -68,6 +68,12 @@ func (s *Server) Router() http.Handler {
 				r.Post("/memos/{id}/retry", s.handleRetry)
 				r.Post("/memos/{id}/tidy", s.handleTidy)
 				r.Post("/memos/{id}/part", s.handlePart)
+				r.Post("/memos/{id}/speakers/find", s.handleFindSpeakers)
+				r.Put("/memos/{id}/speakers/{key}", s.handleNameSpeaker)
+				r.Post("/memos/{id}/segments/speaker", s.handleMoveSegments)
+				r.Get("/people", s.handleListPeople)
+				r.Put("/people/{id}", s.handleUpdatePerson)
+				r.Delete("/people/{id}", s.handleDeletePerson)
 				r.Post("/polish", s.handlePolish)
 				r.Post("/memos/{id}/send", s.handleSend)
 				r.Post("/memos/{id}/actions/{i}", s.handleSkipAction)
@@ -210,6 +216,8 @@ func decodeKeys(r *http.Request, v any) (map[string]bool, error) {
 	}
 	return keys, json.Unmarshal(b, v)
 }
+
+func chiParam(r *http.Request, name string) string { return chi.URLParam(r, name) }
 
 func idParam(r *http.Request, name string) int64 {
 	n, _ := strconv.ParseInt(chi.URLParam(r, name), 10, 64)

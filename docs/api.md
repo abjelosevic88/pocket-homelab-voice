@@ -24,6 +24,26 @@ Everything the UI does goes through `/api/v1`, JSON in and out. Sign in with the
 
 `POST /memos` with `meeting=1` takes a **stereo** recording of a call: the left channel is the person's microphone ("You"), the right the computer's sound, the others on the call ("Others"). The memo gets `meeting: true` and kind `meeting`; each channel is written out on its own with its quiet stretches silenced, and the two are merged by time. Every segment then carries `speaker` (`"You"` or `"Others"`; segments of other memos have no `speaker`), and the transcript is lines `You: …` / `Others: …`. A channel that is silent the whole time is left out (a one-speaker meeting); a recording that is not stereo is written out as one voice. The AI's tidy-up of a meeting keeps the speaker labels, writes a summary with the decisions (`Decisions:` lines at the end of `summary`) and puts the action items in `actions`. The playable copy keeps both channels.
 
+### Who spoke: voices with names
+
+Where python3 with numpy and onnxruntime is installed (the Docker image on amd64 and arm64), the call side is then split into its voices: a pyannote segmentation model finds who speaks when, a WeSpeaker model makes a voice print of each, and the prints are grouped into the people on the call. The two models (~32 MB) are downloaded into `MODELS_DIR/speakers` the first time. Segments then carry `S1`, `S2`, … (in the order they first spoke) instead of `"Others"`, and the memo has:
+
+- `speakers`: `[{key, name, person_id, state, score, suggest, suggest_id, hint, hint_why, rejected, ms, sample: [from, to]}]`, `You` first. `state` is `you`, `confirmed` (named by the person), `auto` (recognised by voice: `score` ≥ 0.72 against a person's voice), `suggested` ("Is this `suggest`?", score 0.50–0.72) or `unknown`. `hint` is a name the AI heard for that voice in the conversation ("Heidi, your turn" before it spoke), with `hint_why`; it never names anyone by itself. `sample` is a clear stretch to listen to.
+- `speakers_status`: `""`, `working`, `done` or `failed` (with `speakers_error`).
+
+The transcript and the tidy text use the names (`Alex: …`), else `Speaker 2: …`. Lines over silence that the speech model repeated ("Let's go." again and again where nobody spoke) are left out.
+
+| Call | What |
+|---|---|
+| `POST /memos/{id}/speakers/find` | Split a meeting written out before into its voices (202; `speakers_status` is `working` until done, a few minutes for an hour). Names the person gave are kept |
+| `PUT /memos/{id}/speakers/{key}` | `{name}` names a voice (a new person is made for a new name; `""` takes the name off), `{person_id}` picks someone, `{answer: "yes"\|"no"}` answers a suggestion or a recognition. Naming or saying yes keeps this meeting's voice print in the person's voice, so the next meeting recognises them; "no" is remembered for this voice. Naming two voices the same person makes them one speaker. The memo comes back |
+| `POST /memos/{id}/segments/speaker` | `{indexes, speaker}`: these segments were said by `speaker` (`""` = a new voice) |
+| `GET /people` | `{items: [{id, name, voices, meetings, heard_ms, last_at, learned}], available, detail}`: the people named in meetings; `learned` (0–1) is how well their voice is known; `available` says whether this server can tell voices apart (and `detail` why not) |
+| `PUT /people/{id} {name}` | Rename someone, in every meeting |
+| `DELETE /people/{id}` | Forget someone: their voice prints go and their meetings say `Speaker n` again |
+
+Voice prints (256 numbers per voice) stay in the database on this server; they are not in exports.
+
 ## Dictation
 
 The history of what Pocket Launcher's dictation on the Mac typed for you (hold a key, talk, the words go into whatever text box has focus). The client posts each finished dictation from a retrying outbox. Session cookie, a personal token and Pocket Core device tokens (`pcd_`) all work; each person sees only their own (another person's id answers 404).

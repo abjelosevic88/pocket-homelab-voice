@@ -26,6 +26,15 @@ export type Kind = 'note' | 'todo' | 'idea' | 'journal' | 'meeting' | 'shopping'
 
 export interface Segment { s: number; e: number; t: string; speaker?: 'You' | 'Others' | string }
 
+/** One voice in a meeting: You, or S1, S2, … on the call, with a name once known. */
+export interface Speaker {
+  key: string; name: string; person_id?: number
+  state: 'you' | 'confirmed' | 'auto' | 'suggested' | 'unknown'
+  score?: number; suggest?: string; suggest_id?: number; hint?: string; hint_why?: string; rejected?: number[]
+  ms: number; sample: [number, number]
+}
+export interface Person { id: number; name: string; voices: number; meetings: number; heard_ms: number; last_at: string; learned: number }
+
 export interface Action {
   type: 'task' | 'event' | 'journal' | 'expense'
   title: string; notes?: string; due?: string; start?: string; end?: string; location?: string; text?: string
@@ -35,13 +44,14 @@ export interface Action {
 
 export interface Sent { id: number; memo_id: number; app: string; kind: string; ref: string; title: string; url: string; created_at: string }
 
-export interface Progress { stage: 'preparing' | 'model' | 'writing'; pct: number }
+export interface Progress { stage: 'preparing' | 'model' | 'writing' | 'speakers'; pct: number }
 
 export interface Memo {
   id: number; title: string; title_set: boolean; recorded_at: string; duration_ms: number; audio_type: string; audio_bytes: number; has_audio: boolean
   peaks: number[]; language: string; status: MemoStatus; error: string; transcript: string; segments: Segment[]; edited: boolean; engine: string
   summary: string; tidy: string; kind: Kind | ''; kind_set: boolean; actions: Action[]; ai_status: '' | 'working' | 'done' | 'failed'; ai_error: string; ai_provider: string
   tags: string; starred: boolean; filed: boolean; meeting: boolean; source: string; source_ref: string; audio_gone_at: string; created_at: string; updated_at: string
+  speakers: Speaker[]; speakers_status: '' | 'working' | 'done' | 'failed'; speakers_error: string
   sent: Sent[]; url: string; audio_url: string; progress?: Progress; queue?: number
 }
 

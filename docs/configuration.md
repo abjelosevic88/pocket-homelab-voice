@@ -13,6 +13,7 @@ Environment variables; every one has a default. Personal settings (language, wor
 | `MAX_AUDIO_BYTES` | `536870912` | Largest recording upload (512 MB) |
 | `MAX_BODY_BYTES` | `67108864` | Largest JSON request, e.g. an export being imported (64 MB) |
 | `WHISPER_BIN`, `PARAKEET_BIN`, `FFMPEG_BIN` | `whisper-cli`, `parakeet-cli`, `ffmpeg` | All in the Docker image (whisper.cpp, with Parakeet, on amd64 and arm64) |
+| `SPEAKERS_PYTHON` | `python3` | Python with numpy and onnxruntime, for telling the voices of a meeting apart (in the Docker image on amd64 and arm64); its two models go to `MODELS_DIR/speakers` |
 | `WHISPER_MODEL` | `large-v3-turbo-q5_0` | The memo model until an admin picks one in Settings → Writing out: `parakeet-tdt-0.6b-v3-q8_0`, `base`, `small`, `large-v3-turbo-q5_0`. Dictation (POST /transcribe) uses Parakeet unless an admin picks another |
 | `WHISPER_THREADS` | half the cores, 1–4 | Threads for dictation (someone is waiting). More than 4 made whisper.cpp no faster on a 6-core i5, only hotter |
 | `WHISPER_BG_THREADS` | `WHISPER_THREADS` default − 1 | Threads for memos and meetings, run with `nice -n 19` so they only take CPU nothing else wants |

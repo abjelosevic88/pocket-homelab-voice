@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -16,6 +17,7 @@ import (
 
 	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
 	"github.com/abjelosevic88/pocket-homelab-voice/internal/config"
+	"github.com/abjelosevic88/pocket-homelab-voice/internal/speakers"
 	"github.com/abjelosevic88/pocket-homelab-voice/internal/speech"
 	"github.com/abjelosevic88/pocket-homelab-voice/internal/store"
 )
@@ -50,6 +52,9 @@ type Server struct {
 	resolved map[string]resolvedURL
 	modesMu  sync.Mutex // one connection-mode report at a time
 
+	speakers *speakers.Engine // who spoke when in a meeting
+	spkSem   chan struct{}    // one speaker finder at a time for the box
+
 	bg      context.Context // lives as long as the server: recordings moving
 	movesMu sync.Mutex
 	moves   map[int64]*moveState // per person: recordings moving to their place
@@ -67,6 +72,8 @@ func New(cfg *config.Config, st *store.Store, log *slog.Logger, webFS fs.FS) *Se
 		core:     core.New(cfg.CoreURL, core.Options{DB: st.DB, TokenFile: cfg.DataDir + "/core.token", UserAgent: cfg.UserAgent}),
 		resolved: map[string]resolvedURL{},
 		speech:   &speech.Local{Whisper: cfg.WhisperBin, Parakeet: cfg.ParakeetBin, FFmpeg: cfg.FFmpegBin, Dir: cfg.ModelsDir, BaseURL: cfg.ModelBaseURL, UserAgent: cfg.UserAgent, Threads: cfg.WhisperThreads, BackThreads: cfg.BackThreads},
+		speakers: &speakers.Engine{Python: cfg.SpeakersPython, Dir: filepath.Join(cfg.ModelsDir, "speakers"), UserAgent: cfg.UserAgent, Threads: firstPositive(cfg.BackThreads, speech.DefaultBackThreads())},
+		spkSem:   make(chan struct{}, 1),
 		kick:     make(chan struct{}, 1), prog: map[int64]progress{}, aiSem: make(chan struct{}, 2),
 		bg: context.Background(), moves: map[int64]*moveState{}}
 }
@@ -104,6 +111,7 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 	}
 	_ = s.store.PurgeSessions(ctx)
 	s.cleanEcho(ctx)
+	go s.findMissingVoices(ctx)
 	s.bg = ctx
 	go s.janitor(ctx)
 	go s.worker(ctx)
