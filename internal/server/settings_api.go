@@ -476,7 +476,7 @@ func (s *Server) handleExportZip(w http.ResponseWriter, r *http.Request) {
 		if m.Audio == "" {
 			continue
 		}
-		src, err := os.Open(s.audioPath(uid, m.Audio))
+		src, err := s.openAudio(ctx, &m)
 		if err != nil {
 			continue
 		}

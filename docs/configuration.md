@@ -8,7 +8,8 @@ Environment variables; every one has a default. Personal settings (language, wor
 | `BASE_URL` | – | Public URL (links in pushes and notes, the OIDC callback) |
 | `DATA_DIR` | `./data` | Database, recordings, speech models, Core token, backups |
 | `DB_PATH` | `$DATA_DIR/pocket-voice.db` | SQLite file |
-| `AUDIO_DIR` | `$DATA_DIR/audio` | Recordings, a folder per person |
+| `AUDIO_DIR` | `$DATA_DIR/audio` | Recordings, a folder per person: where they arrive and are written out, and where they stay unless the person chooses another place |
+| `STORAGE_ROOTS` | – | Server folders people may keep their recordings in, comma-separated (mount a NAS share into the container and list it here, e.g. `/nas`). Each person picks one and their own folder in it under Settings → Writing out → Where recordings are kept. Pocket Files (through a Core link), Nextcloud and any WebDAV server are offered too |
 | `MAX_AUDIO_BYTES` | `536870912` | Largest recording upload (512 MB) |
 | `MAX_BODY_BYTES` | `67108864` | Largest JSON request, e.g. an export being imported (64 MB) |
 | `WHISPER_BIN`, `PARAKEET_BIN`, `FFMPEG_BIN` | `whisper-cli`, `parakeet-cli`, `ffmpeg` | All in the Docker image (whisper.cpp, with Parakeet, on amd64 and arm64) |

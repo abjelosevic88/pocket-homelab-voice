@@ -131,6 +131,7 @@ var errNoWhisper = errors.New("this server cannot write out speech by itself (wh
 
 func (s *Server) process(ctx context.Context, m *store.Memo) {
 	defer s.clearProgress(m.ID)
+	defer s.keepAway(m.UserID) // done or failed: to the person's place
 	s.setProgress(m.ID, "preparing", -1)
 	st, _ := s.store.GetSettings(ctx, m.UserID)
 	res, err := s.writeOut(speech.Background(ctx), m, st)
@@ -212,10 +213,12 @@ func (s *Server) writeOut(ctx context.Context, m *store.Memo, st store.Settings)
 	if m.Audio == "" {
 		return nil, errors.New("there is no recording to write out")
 	}
-	path := s.audioPath(m.UserID, m.Audio)
-	if _, err := os.Stat(path); err != nil {
-		return nil, errors.New("the recording file is missing")
+	path, fetched, err := s.localAudio(ctx, m)
+	if err != nil {
+		return nil, err
 	}
+	defer fetched()
+	away := m.AudioAt != ""
 	wav := filepath.Join(s.tmpDir(), fmt.Sprintf("memo-%d-%d.wav", m.ID, time.Now().UnixNano()))
 	defer os.Remove(wav)
 	hasWAV := false
@@ -228,7 +231,7 @@ func (s *Server) writeOut(ctx context.Context, m *store.Memo, st store.Settings)
 		if dur, peaks, err := speech.WAVInfo(wav, 120); err == nil {
 			m.DurationMS, m.Peaks, measured = dur, peaks, true
 		}
-		if !speech.Playable(m.AudioType) {
+		if !away && !speech.Playable(m.AudioType) {
 			name := strings.TrimSuffix(m.Audio, filepath.Ext(m.Audio)) + ".m4a"
 			out := s.audioPath(m.UserID, name)
 			conv := s.speech.ToM4A
@@ -390,7 +393,7 @@ func (s *Server) tidyFiles(ctx context.Context) {
 			if m.Starred {
 				continue // a starred memo keeps its recording
 			}
-			_ = os.Remove(s.audioPath(uid, m.Audio))
+			s.removeAudio(ctx, m)
 			m.Audio, m.AudioType, m.AudioBytes, m.AudioGoneAt = "", "", 0, store.Now()
 			_ = s.store.SaveMemo(ctx, uid, m)
 		}

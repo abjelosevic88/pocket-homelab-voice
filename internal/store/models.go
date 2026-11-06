@@ -114,6 +114,9 @@ type Memo struct {
 	Source      string    `json:"source"`  // "" recorded here | upload | import | <app slug>
 	SourceRef   string    `json:"source_ref"`
 	AudioGoneAt string    `json:"audio_gone_at"` // the recording was let go (Settings → keep recordings)
+	AudioAt     string    `json:"-"`             // where it is kept: "" this box, else a place key
+	AudioAway   string    `json:"-"`             // its path in that place
+	AudioWhere  string    `json:"audio_where"`   // where it is kept, for people ("" = this box)
 	CreatedAt   string    `json:"created_at"`
 	UpdatedAt   string    `json:"updated_at"`
 
@@ -198,6 +201,15 @@ type Settings struct {
 	OpenAIKey     string `json:"openai_api_key"`
 	OpenAIModel   string `json:"openai_model"`
 	OpenAIBaseURL string `json:"openai_base_url"`
+
+	// Where recordings are kept once written out (storage.go): "" this box |
+	// folder (StoragePath, inside STORAGE_ROOTS) | files (a folder in Pocket
+	// Files) | nextcloud | webdav (StorageURL, user, password, folder).
+	StorageKind string `json:"storage_kind"`
+	StoragePath string `json:"storage_path"`
+	StorageURL  string `json:"storage_url"`
+	StorageUser string `json:"storage_user"`
+	StoragePass string `json:"storage_password"`
 }
 
 // SplitTags turns "a, b ,c" into clean lowercase tags.
