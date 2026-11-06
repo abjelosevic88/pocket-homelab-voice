@@ -45,6 +45,7 @@
 - **Meetings**: Pocket Launcher records a call in stereo (you on the left, the call on the right); Voice writes out each side, shows who said what, and the AI writes the summary, the decisions and the action items. When your microphone hears the call (no headphones), that echo is left out, so "You" is only what you said. The waveform takes the colour of who was talking, with a lane each for you and the others and how much each talked; light up one speaker to step through their turns.
 - **Pick a part**: drag across the waveform to pick a stretch of any recording: play just that, see who talked how much and what was said there, have the AI sum it up, copy it or a link to it (`?part=750-1125`).
 - **Keep recordings** forever or let them go after a month to a year (the words stay; starred memos keep theirs).
+- **Keep them where you like**: on the server, in a folder the admin offers (a NAS share), in your Pocket Files, Nextcloud or any WebDAV server. Each one lands there as `2026/11/2026-11-06 12.00 Daily Team Meeting (10).m4a` once written out, plays from there (seeking included), and choosing another place moves them all.
 - **Pushes** through Apprise, ntfy or a webhook: a long memo written out, one that could not be, and a morning list of memos to file.
 - **Everyone their own**: each person has their own memos, recordings, settings and connections; admins see no one else's.
 - **Export** as JSON (memos and dictation history, and back in, idempotent) or every recording with its words as a ZIP; a whole-database backup for admins.

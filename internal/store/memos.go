@@ -12,7 +12,7 @@ import (
 
 const memoCols = `id, user_id, title, title_set, recorded_at, duration_ms, audio, audio_type, audio_bytes, peaks, language, status, error,
 	transcript, segments, edited, engine, summary, tidy, kind, kind_set, actions, ai_status, ai_error, ai_provider, tags, starred, filed,
-	source, source_ref, audio_gone_at, meeting, created_at, updated_at`
+	source, source_ref, audio_gone_at, meeting, created_at, updated_at, audio_at, audio_away`
 
 type scanner interface{ Scan(...any) error }
 
@@ -22,7 +22,7 @@ func scanMemo(r scanner) (*Memo, error) {
 	var peaks, segs, actions string
 	if err := r.Scan(&m.ID, &m.UserID, &m.Title, &titleSet, &m.RecordedAt, &m.DurationMS, &m.Audio, &m.AudioType, &m.AudioBytes, &peaks, &m.Language,
 		&m.Status, &m.Error, &m.Transcript, &segs, &edited, &m.Engine, &m.Summary, &m.Tidy, &m.Kind, &kindSet, &actions, &m.AIStatus, &m.AIError,
-		&m.AIProvider, &m.Tags, &starred, &filed, &m.Source, &m.SourceRef, &m.AudioGoneAt, &meeting, &m.CreatedAt, &m.UpdatedAt); err != nil {
+		&m.AIProvider, &m.Tags, &starred, &filed, &m.Source, &m.SourceRef, &m.AudioGoneAt, &meeting, &m.CreatedAt, &m.UpdatedAt, &m.AudioAt, &m.AudioAway); err != nil {
 		return nil, err
 	}
 	m.TitleSet, m.Edited, m.KindSet, m.Starred, m.Filed = titleSet == 1, edited == 1, kindSet == 1, starred == 1, filed == 1
@@ -491,6 +491,75 @@ func (s *Store) MeetingMemos(ctx context.Context) ([]MemoRef, error) {
 			return nil, err
 		}
 		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// SetAudioAway records that a recording now lives at the place at (path
+// away there); at "" brings it back to this box under its own name.
+func (s *Store) SetAudioAway(ctx context.Context, uid, id int64, at, away string) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE memos SET audio_at = ?, audio_away = ? WHERE id = ? AND user_id = ?`, at, away, id, uid)
+	return err
+}
+
+// AudioToMove lists uid's written-out (or failed) memos whose recording is
+// not at the place at yet, oldest first.
+func (s *Store) AudioToMove(ctx context.Context, uid int64, at string, limit int) ([]Memo, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT `+memoCols+` FROM memos WHERE user_id = ? AND audio <> '' AND status IN ('done','failed')
+		AND audio_at <> ? ORDER BY id LIMIT ?`, uid, at, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Memo{}
+	for rows.Next() {
+		m, err := scanMemo(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *m)
+	}
+	return out, rows.Err()
+}
+
+// AudioPlaces counts uid's recordings by where they are ('' = this box).
+func (s *Store) AudioPlaces(ctx context.Context, uid int64) map[string]AudioPlace {
+	out := map[string]AudioPlace{}
+	rows, err := s.DB.QueryContext(ctx, `SELECT audio_at, COUNT(*), COALESCE(SUM(audio_bytes),0) FROM memos WHERE user_id = ? AND audio <> '' GROUP BY audio_at`, uid)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var at string
+		var p AudioPlace
+		if rows.Scan(&at, &p.Count, &p.Bytes) == nil {
+			out[at] = p
+		}
+	}
+	return out
+}
+
+// AudioPlace is how many recordings, and how many bytes, are in one place.
+type AudioPlace struct {
+	Count int   `json:"count"`
+	Bytes int64 `json:"bytes"`
+}
+
+// UsersWithAudio is everyone who has a recording.
+func (s *Store) UsersWithAudio(ctx context.Context) ([]int64, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT DISTINCT user_id FROM memos WHERE audio <> ''`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
 	}
 	return out, rows.Err()
 }

@@ -49,6 +49,10 @@ type Server struct {
 	coreErr  string
 	resolved map[string]resolvedURL
 	modesMu  sync.Mutex // one connection-mode report at a time
+
+	bg      context.Context // lives as long as the server: recordings moving
+	movesMu sync.Mutex
+	moves   map[int64]*moveState // per person: recordings moving to their place
 }
 
 type resolvedURL struct {
@@ -63,7 +67,8 @@ func New(cfg *config.Config, st *store.Store, log *slog.Logger, webFS fs.FS) *Se
 		core:     core.New(cfg.CoreURL, core.Options{DB: st.DB, TokenFile: cfg.DataDir + "/core.token", UserAgent: cfg.UserAgent}),
 		resolved: map[string]resolvedURL{},
 		speech:   &speech.Local{Whisper: cfg.WhisperBin, Parakeet: cfg.ParakeetBin, FFmpeg: cfg.FFmpegBin, Dir: cfg.ModelsDir, BaseURL: cfg.ModelBaseURL, UserAgent: cfg.UserAgent, Threads: cfg.WhisperThreads, BackThreads: cfg.BackThreads},
-		kick:     make(chan struct{}, 1), prog: map[int64]progress{}, aiSem: make(chan struct{}, 2)}
+		kick:     make(chan struct{}, 1), prog: map[int64]progress{}, aiSem: make(chan struct{}, 2),
+		bg: context.Background(), moves: map[int64]*moveState{}}
 }
 
 // Bootstrap seeds the first admin (if configured), the owner's integration
@@ -99,6 +104,7 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 	}
 	_ = s.store.PurgeSessions(ctx)
 	s.cleanEcho(ctx)
+	s.bg = ctx
 	go s.janitor(ctx)
 	go s.worker(ctx)
 	if s.core.Configured() {
@@ -170,10 +176,12 @@ func (s *Server) janitor(ctx context.Context) {
 			return
 		case <-first.C:
 			s.tidyFiles(ctx)
+			s.sweepStorage(ctx)
 		case <-minute.C:
 			s.pushes(ctx)
 		case <-hour.C:
 			s.tidyFiles(ctx)
+			s.sweepStorage(ctx)
 		}
 	}
 }
@@ -221,7 +229,7 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "VOICE",
 		Publishes: eventTopics,
 		Offers:    linkOffers,
-		Uses:      append(linkUses(), core.InferenceUse()),
+		Uses:      append(linkUses(), filesUse(), core.InferenceUse()),
 	}
 	if s.cfg.BaseURL != "" {
 		m.OIDC = &core.OIDCRequest{RedirectURIs: []string{s.oidcCallbackURL()}}

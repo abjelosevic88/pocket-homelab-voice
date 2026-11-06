@@ -404,14 +404,11 @@ func (s *Server) handleDeleteMemo(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "an app may remove only the memos it added")
 		return
 	}
-	audio, err := s.store.DeleteMemo(ctx, uid, m.ID)
-	if err != nil {
+	if _, err := s.store.DeleteMemo(ctx, uid, m.ID); err != nil {
 		s.fail(w, err, "delete memo")
 		return
 	}
-	if audio != "" {
-		_ = os.Remove(s.audioPath(uid, audio))
-	}
+	s.removeAudio(ctx, m)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -428,14 +425,6 @@ func (s *Server) handleAudio(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "this memo has no recording")
 		return
 	}
-	f, err := os.Open(s.audioPath(uid, m.Audio))
-	if err != nil {
-		writeErr(w, http.StatusNotFound, "the recording file is missing")
-		return
-	}
-	defer f.Close()
-	fi, _ := f.Stat()
-	w.Header().Set("Content-Type", firstNonEmpty(m.AudioType, "application/octet-stream"))
 	w.Header().Set("Cache-Control", "private, max-age=3600")
 	name := firstNonEmpty(safeFileName(m.Title), "memo") + filepath.Ext(m.Audio)
 	disp := "inline"
@@ -443,6 +432,18 @@ func (s *Server) handleAudio(w http.ResponseWriter, r *http.Request) {
 		disp = "attachment"
 	}
 	w.Header().Set("Content-Disposition", disp+"; filename*=UTF-8''"+url.PathEscape(name))
+	if s.serveAway(w, r, m) {
+		return
+	}
+	f, err := os.Open(s.audioPath(uid, m.Audio))
+	if err != nil {
+		w.Header().Del("Content-Disposition")
+		writeErr(w, http.StatusNotFound, "the recording file is missing")
+		return
+	}
+	defer f.Close()
+	fi, _ := f.Stat()
+	w.Header().Set("Content-Type", firstNonEmpty(m.AudioType, "application/octet-stream"))
 	http.ServeContent(w, r, name, fi.ModTime(), f)
 }
 

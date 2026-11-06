@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
-import type { APIToken, AppSlug, AppStyle, DictationPage, DictationStyle, DictationStyles, CalendarItem, ConnMode, MoneyAccount, MoneyCategory, NoteFolder, Picked, Settings as SettingsT, Speech, TaskList, User } from '../lib/types'
+import type { APIToken, AppSlug, AppStyle, DictationPage, DictationStyle, DictationStyles, CalendarItem, ConnMode, MoneyAccount, MoneyCategory, NoteFolder, Picked, Settings as SettingsT, Speech, StorageInfo, StorageKind, TaskList, User } from '../lib/types'
 import { DATE_FORMATS, TIME_FORMATS, fmtBytes, fmtDateTime, type DateFormat, type TimeFormat } from '../lib/format'
 import { Avatar, Confirm, CoreHint, Field, Loading, Modal, Segmented, SettingRow, Switch, Tabs, useAsync, useIsMobile, useToast } from '../components/ui'
 import { Icon } from '../components/icons'
@@ -208,8 +208,84 @@ function SpeechTab() {
           <Select ariaLabel="Keep recordings" value={String(f.keep_audio_days)} onChange={v => save({ keep_audio_days: Number(v) })} options={KEEP} />
         </SettingRow>
       </Section>
+      <StorageSection />
       <div className="row"><button type="button" className="btn primary" onClick={() => save()} disabled={busy}>Save changes</button></div>
     </div>
+  )
+}
+
+// StorageSection: where recordings are kept once written out — this server, a
+// server folder the admin offers (a NAS), Pocket Files, Nextcloud or WebDAV.
+// Choosing moves every recording there; new ones follow when written out.
+function StorageSection() {
+  const { toast } = useToast()
+  const { data: info, reload } = useAsync(() => api.get<StorageInfo>(`${V1}/storage`), [])
+  const [d, setD] = useState<{ kind: StorageKind; root: string; sub: string; path: string; url: string; user: string; password: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const running = !!info?.move.running
+  useEffect(() => {
+    if (!running) return
+    const t = window.setInterval(reload, 1500)
+    return () => window.clearInterval(t)
+  }, [running]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!info || d) return
+    const roots = info.options.find(o => o.kind === 'folder')?.roots || []
+    const root = roots.find(r => info.kind === 'folder' && (info.path === r || info.path.startsWith(r + '/'))) || roots[0] || ''
+    const sub = info.kind === 'folder' && root ? info.path.slice(root.length).replace(/^\/+/, '') : info.suggested_folder
+    setD({ kind: info.kind, root, sub, path: info.kind === 'folder' ? '' : info.path || 'Voice', url: info.url, user: info.user, password: info.password })
+  }, [info]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (!info || !d) return null
+  const opt = info.options.find(o => o.kind === d.kind)
+  const set = (p: Partial<typeof d>) => setD({ ...d, ...p })
+  const use = async () => {
+    setBusy(true)
+    const path = d.kind === 'folder' ? [d.root, d.sub.trim()].filter(Boolean).join('/') : d.path
+    try {
+      await api.put(`${V1}/storage`, { kind: d.kind, path, url: d.url, user: d.user, password: d.password })
+      toast(d.kind === 'box' ? 'Recordings come back to this server' : 'Recordings are moving there')
+      reload()
+    } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
+  }
+  const { kept_there: there, waiting_here: here, elsewhere, move } = info
+  return (
+    <Section title="Where recordings are kept" icon="server" actions={<span className="badge">{info.where}</span>}
+      sub="Recordings arrive here and are written out here; then they move to the place you choose and play from there. Choosing another place moves every recording over, and this server brings them back.">
+      <p className="small muted">
+        {there.count} {there.count === 1 ? 'recording' : 'recordings'} ({fmtBytes(there.bytes)}) in {info.where}
+        {here.count > 0 && <> · {here.count} on this server, moving when written out</>}
+        {elsewhere.count > 0 && <> · {elsewhere.count} still at the place before</>}
+      </p>
+      {move.running && <p className="small"><Icon name="refresh" size={13} /> Moving {move.done} of {move.total}…</p>}
+      {!move.running && move.error && <p className="small warn-text">Last move: {move.error}{move.failed > 0 && ` (${move.failed} not moved; tried again within the hour)`}</p>}
+      <SettingRow title="Keep them on">
+        <Select ariaLabel="Where recordings are kept" value={d.kind} onChange={v => set({ kind: v as StorageKind })}
+          options={info.options.map(o => ({ value: o.kind, label: o.name, disabled: !o.ready }))} />
+      </SettingRow>
+      {opt && !opt.ready && opt.why && <p className="small muted">{opt.why[0].toUpperCase() + opt.why.slice(1)}.</p>}
+      {d.kind === 'folder' && opt?.ready && <>
+        <SettingRow title="Folder" help="Folders the admin made available on this server, such as a NAS share.">
+          <Select ariaLabel="Server folder" value={d.root} onChange={v => set({ root: v })} options={(opt.roots || []).map(r => ({ value: r, label: r }))} />
+        </SettingRow>
+        <SettingRow title="Your folder in it" help="Each recording goes in a year/month folder, named by its day, time and title.">
+          <input value={d.sub} onChange={e => set({ sub: e.target.value })} placeholder={info.suggested_folder} />
+        </SettingRow>
+      </>}
+      {d.kind === 'files' && <SettingRow title="Folder in your files" help="Reached through Pocket Core: allow Voice → Files in Pocket Core → Links once.">
+        <input value={d.path} onChange={e => set({ path: e.target.value })} placeholder="Voice" />
+      </SettingRow>}
+      {(d.kind === 'nextcloud' || d.kind === 'webdav') && <>
+        <SettingRow title={d.kind === 'nextcloud' ? 'Nextcloud address' : 'WebDAV address'}>
+          <input value={d.url} onChange={e => set({ url: e.target.value })} placeholder={d.kind === 'nextcloud' ? 'https://cloud.example.com' : 'https://nas.local/webdav'} />
+        </SettingRow>
+        <SettingRow title="Username"><input value={d.user} onChange={e => set({ user: e.target.value })} autoComplete="off" /></SettingRow>
+        <SettingRow title={d.kind === 'nextcloud' ? 'App password' : 'Password'} help={d.kind === 'nextcloud' ? 'Nextcloud → Settings → Security → Devices & sessions → Create new app password.' : undefined}>
+          <input type="password" value={d.password} onChange={e => set({ password: e.target.value })} autoComplete="new-password" />
+        </SettingRow>
+        <SettingRow title="Folder"><input value={d.path} onChange={e => set({ path: e.target.value })} placeholder="Voice" /></SettingRow>
+      </>}
+      <div className="row"><button type="button" className="btn primary" onClick={use} disabled={busy || running || (opt && !opt.ready)}>{d.kind === 'box' ? 'Keep them on this server' : 'Check and move them there'}</button></div>
+    </Section>
   )
 }
 

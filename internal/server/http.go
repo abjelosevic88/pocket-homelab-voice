@@ -120,6 +120,8 @@ func (s *Server) Router() http.Handler {
 
 				r.Get("/settings", s.handleGetSettings)
 				r.Put("/settings", s.handlePutSettings)
+				r.Get("/storage", s.handleGetStorage)
+				r.Put("/storage", s.handlePutStorage)
 				r.Get("/settings/system", s.handleSystemInfo)
 
 				r.Get("/tokens", s.handleListTokens)

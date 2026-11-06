@@ -64,7 +64,8 @@ type Config struct {
 	ParakeetBin    string
 	FFmpegBin      string
 	WhisperModel   string // the box default until an admin picks one in Settings
-	WhisperThreads int // dictation
+	StorageRoots   []string // server folders people may keep recordings in (STORAGE_ROOTS, e.g. a NAS mount)
+	WhisperThreads int      // dictation
 	BackThreads    int // memos and meetings, at the lowest priority
 	ModelsDir      string
 	ModelBaseURL   string
@@ -194,6 +195,11 @@ func Load() (*Config, error) {
 	}
 	if c.OIDCIssuer != "" && (c.OIDCClientID == "" || c.BaseURL == "") {
 		return nil, fmt.Errorf("OIDC_ISSUER needs OIDC_CLIENT_ID and BASE_URL (the callback is BASE_URL/api/v1/auth/oidc/callback)")
+	}
+	for _, r := range strings.Split(env("STORAGE_ROOTS", ""), ",") {
+		if r = strings.TrimRight(strings.TrimSpace(r), "/"); r != "" {
+			c.StorageRoots = append(c.StorageRoots, r)
+		}
 	}
 	return c, nil
 }

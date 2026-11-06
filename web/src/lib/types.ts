@@ -79,3 +79,13 @@ export interface Word { id: number; phrase: string; replace_with: string; source
 export type DictationStyle = 'natural' | 'casual' | 'formal' | 'code' | 'none'
 export interface AppStyle { app_id: string; app: string; style: DictationStyle }
 export interface DictationStyles { default: DictationStyle; apps: AppStyle[] }
+
+export type StorageKind = 'box' | 'folder' | 'files' | 'nextcloud' | 'webdav'
+export interface StoragePlace { count: number; bytes: number }
+export interface StorageInfo {
+  kind: StorageKind; path: string; url: string; user: string; password: string; where: string
+  kept_there: StoragePlace; waiting_here: StoragePlace; elsewhere: StoragePlace
+  move: { running: boolean; done: number; total: number; failed: number; error?: string; at?: string }
+  options: { kind: StorageKind; name: string; ready: boolean; why?: string; roots?: string[] }[]
+  suggested_folder: string
+}
