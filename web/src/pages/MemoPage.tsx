@@ -59,14 +59,26 @@ export default function MemoPage() {
   const vs = useMemo(() => (m ? voices(m) : []), [m])
   useEffect(() => { if (m && !m.tidy && tab === 'tidy' && m.ai_status !== 'working') setTab('words') }, [m?.tidy, m?.ai_status]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    const h = (e: KeyboardEvent) => {
+    // space plays and pauses wherever you are on the page — also after clicking
+    // play, the waveform or any other button (which would otherwise take the
+    // key) — except while typing, in a dialog or menu, or on a control that
+    // opens one
+    let took = false
+    const typing = (t: HTMLElement) => !!t.closest('textarea, select, [contenteditable="true"], [aria-haspopup]')
+      || (t instanceof HTMLInputElement && !['button', 'checkbox', 'radio', 'range', 'submit'].includes(t.type))
+    const down = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
       if (e.key === 'Escape' && !document.querySelector('.modal-backdrop, .menu') && !t.closest('input, textarea')) { setRange(null); return }
-      if (e.key !== ' ' || t.closest('input, textarea, button, [contenteditable="true"], [role="slider"]') || document.querySelector('.modal-backdrop')) return
-      e.preventDefault(); player.current?.toggle()
+      if (e.key !== ' ' || e.metaKey || e.ctrlKey || e.altKey || typing(t) || document.querySelector('.modal-backdrop, .menu, .popover, .sel-pop')) return
+      e.preventDefault(); e.stopPropagation()
+      took = true
+      if (!e.repeat) player.current?.toggle()
     }
-    window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
+    // a focused button would still click on the key's release
+    const up = (e: KeyboardEvent) => { if (e.key === ' ' && took) { e.preventDefault(); e.stopPropagation(); took = false } }
+    window.addEventListener('keydown', down, true)
+    window.addEventListener('keyup', up, true)
+    return () => { window.removeEventListener('keydown', down, true); window.removeEventListener('keyup', up, true) }
   }, [])
 
   if (err) return <div className="callout danger"><Icon name="alert" size={15} /><span>{err === 'not found' ? 'This memo is not here (anymore).' : err}</span></div>
