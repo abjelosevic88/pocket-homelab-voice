@@ -99,8 +99,12 @@ func (s *Server) tidy(ctx context.Context, uid, id int64) error {
 		rec = t.Local()
 	}
 	text := m.Transcript
-	if utf8.RuneCountInString(text) > 24000 {
-		text = string([]rune(text)[:24000])
+	limit := 24000
+	if m.Meeting {
+		limit = 120000 // a meeting is read whole: cut short, the AI thinks it ended there
+	}
+	if utf8.RuneCountInString(text) > limit {
+		text = string([]rune(text)[:limit])
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "Recorded: %s, %s (time zone %s).\n", rec.Format("Monday 2 January 2006"), rec.Format("15:04"), rec.Location().String())

@@ -150,3 +150,23 @@ func (s *Store) MeetingsWithoutVoices(ctx context.Context) ([]MemoRef, error) {
 	}
 	return out, rows.Err()
 }
+
+// MeetingsWithOldTidy are meetings whose voices are known but whose AI tidy-up
+// was written before: it still says "Others:".
+func (s *Store) MeetingsWithOldTidy(ctx context.Context) ([]MemoRef, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT id, user_id FROM memos WHERE meeting = 1 AND speakers != '[]' AND ai_status != 'working'
+		AND (tidy LIKE 'Others:%' OR tidy LIKE '%'||char(10)||'Others:%') ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []MemoRef
+	for rows.Next() {
+		var r MemoRef
+		if err := rows.Scan(&r.ID, &r.UserID); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}

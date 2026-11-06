@@ -310,3 +310,19 @@ func TestNameHints(t *testing.T) {
 		t.Fatalf("asked: %s", asked)
 	}
 }
+
+func TestOldTidyIsFound(t *testing.T) {
+	a := newApp(t, nil)
+	c := context.Background()
+	old := meeting(t, a, voice(1, 0, 0), voice(2, 0, 0))
+	old.Tidy = "You: Shall we ship?\nOthers: We ship Friday."
+	_ = a.st.SaveMemo(c, a.ids["Alice"], old)
+	fresh := meeting(t, a, voice(1, 0, 0), voice(2, 0, 0)) // its tidy-up names the voices
+	if !oldTidy(old) || oldTidy(fresh) {
+		t.Fatal("oldTidy")
+	}
+	list, err := a.st.MeetingsWithOldTidy(c)
+	if err != nil || len(list) != 1 || list[0].ID != old.ID {
+		t.Fatalf("old tidy-ups: %v %v", list, err)
+	}
+}
