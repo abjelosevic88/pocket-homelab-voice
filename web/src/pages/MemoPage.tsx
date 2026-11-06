@@ -161,7 +161,7 @@ export default function MemoPage() {
           {tab === 'tidy' && m.tidy && editing !== 'tidy' && <button type="button" className="btn ghost sm" onClick={() => setEditing('tidy')}><Icon name="edit" size={14} />Edit</button>}
         </div>
         <div className="card-body">
-          {m.summary && tab === 'tidy' && <p className="memo-summary">{m.summary}</p>}
+          {m.summary && tab === 'tidy' && <Summary text={m.summary} />}
           {tab === 'tidy' && (editing === 'tidy' ? <TextEdit value={m.tidy} onDone={v => { setEditing(''); if (v !== null && v !== m.tidy) save({ tidy: v }, 'Saved') }} />
             : m.tidy ? <Prose text={m.tidy} vs={vs} /> : <TidyEmpty memo={m} onTidy={tidyNow} />)}
           {tab === 'words' && (editing === 'words' ? <TextEdit value={m.transcript} onDone={v => { setEditing(''); if (v !== null && v !== m.transcript) save({ transcript: v }, 'Saved') }} />
@@ -191,35 +191,73 @@ export default function MemoPage() {
   )
 }
 
-/** Paragraphs, and "- " lines as a list. */
-function Prose({ text, vs = [] }: { text: string; vs?: Voice[] }) {
-  const blocks: { list: boolean; lines: string[] }[] = []
-  for (const line of text.split('\n')) {
-    const item = /^\s*[-•*]\s+/.test(line)
-    const last = blocks[blocks.length - 1]
-    if (!line.trim()) { blocks.push({ list: false, lines: [] }); continue }
-    if (last && last.list === item && last.lines.length) last.lines.push(item ? line.replace(/^\s*[-•*]\s+/, '') : line)
-    else blocks.push({ list: item, lines: [item ? line.replace(/^\s*[-•*]\s+/, '') : line] })
-  }
-  const labels = [...new Set(['You', 'Others', ...vs.map(v => v.label)])].sort((a, b) => b.length - a.length)
-  const speakerLine = new RegExp(`^(${labels.map(l => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')}|Speaker \\d+):\\s*`)
-  const colorOf = (who: string) => vs.find(v => v.label === who)?.color
+/** The AI's summary; a meeting's decisions ("Decisions:" and "- " lines) as a list. */
+function Summary({ text }: { text: string }) {
+  const [main, dec = ''] = text.split(/\n+Decisions:\s*\n/)
+  const decisions = dec.split('\n').map(l => l.replace(/^\s*[-•*]\s*/, '').trim()).filter(Boolean)
   return (
-    <div className="memo-text">
-      {blocks.filter(b => b.lines.length).map((b, i) => b.list
-        ? <ul key={i}>{b.lines.map((l, j) => <li key={j}>{l}</li>)}</ul>
-        : b.lines.some(l => speakerLine.test(l))
-          // a meeting's lines: "You: …" / "Alex: …"
-          ? <div key={i} className="turns">{b.lines.map((l, j) => {
-            const who = l.match(speakerLine)?.[1] || ''
-            const c = colorOf(who)
-            return <div key={j} className={`turn ${c ? 'voiced' : ''}`} style={c ? { '--c': c } as React.CSSProperties : undefined}>{who && <span className="spk">{who}</span>}<p>{l.replace(speakerLine, '')}</p></div>
-          })}</div>
-          : <p key={i}>{b.lines.join('\n')}</p>)}
+    <div className="memo-summary">
+      {main.split(/\n{2,}/).map((p, i) => <p key={i}>{p}</p>)}
+      {decisions.length > 0 && <div className="decisions">
+        <span className="decisions-h">Decided</span>
+        <ul>{decisions.map((d, i) => <li key={i}><Icon name="check" size={14} />{d}</li>)}</ul>
+      </div>}
     </div>
   )
 }
 
+type Block = { kind: 'p' | 'list' | 'turns' | 'topic'; lines: string[] }
+
+/** Paragraphs, "- " lines as a list, "## " lines as topics; a meeting's
+ *  "Name: …" lines as turns (one per speaker in a row), with a bar to jump
+ *  between the topics. */
+function Prose({ text, vs = [] }: { text: string; vs?: Voice[] }) {
+  const labels = [...new Set(['You', 'Others', ...vs.map(v => v.label)])].sort((a, b) => b.length - a.length)
+  const speakerLine = new RegExp(`^(${labels.map(l => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')}|Speaker \\d+):\\s*`)
+  const colorOf = (who: string) => vs.find(v => v.label === who)?.color
+  const blocks: Block[] = []
+  for (const raw of text.split('\n')) {
+    const line = raw.trimEnd()
+    const last = blocks[blocks.length - 1]
+    if (!line.trim()) { if (last && last.kind !== 'topic') blocks.push({ kind: 'p', lines: [] }); continue }
+    if (/^#{1,4}\s+/.test(line)) { blocks.push({ kind: 'topic', lines: [line.replace(/^#{1,4}\s+/, '').replace(/\*\*/g, '')] }); continue }
+    const kind: Block['kind'] = /^\s*[-•*]\s+/.test(line) ? 'list' : speakerLine.test(line) ? 'turns' : 'p'
+    const l = kind === 'list' ? line.replace(/^\s*[-•*]\s+/, '') : line
+    if (last && last.lines.length && last.kind === kind) last.lines.push(l)
+    else if (last && !last.lines.length) { last.kind = kind; last.lines.push(l) }
+    else blocks.push({ kind, lines: [l] })
+  }
+  const shown = blocks.filter(b => b.lines.length)
+  const topics = shown.filter(b => b.kind === 'topic')
+  const base = useRef(`t${Math.random().toString(36).slice(2, 7)}`).current
+  let ti = 0
+  return (
+    <div className="memo-text">
+      {topics.length >= 3 && <nav className="topic-bar" aria-label="Topics">{topics.map((t, i) => (
+        <button key={i} type="button" className="topic-chip" onClick={() => document.getElementById(`${base}-${i}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>{t.lines[0]}</button>
+      ))}</nav>}
+      {shown.map((b, i) => {
+        if (b.kind === 'topic') return <h4 key={i} id={`${base}-${ti++}`} className="topic">{b.lines[0]}</h4>
+        if (b.kind === 'list') return <ul key={i}>{b.lines.map((l, j) => <li key={j}>{l}</li>)}</ul>
+        if (b.kind === 'p') return <p key={i}>{b.lines.join('\n')}</p>
+        // a meeting's lines: "You: …" / "Alex: …", a speaker's lines in a row as one turn
+        const turns: { who: string; text: string[] }[] = []
+        for (const l of b.lines) {
+          const who = l.match(speakerLine)?.[1] || ''
+          const t = l.replace(speakerLine, '')
+          const prev = turns[turns.length - 1]
+          if (prev && who && prev.who === who) prev.text.push(t)
+          else turns.push({ who, text: [t] })
+        }
+        return <div key={i} className="turns">{turns.map((t, j) => {
+          const c = colorOf(t.who)
+          return <div key={j} className={`turn ${c ? 'voiced' : ''}`} style={c ? { '--c': c } as React.CSSProperties : undefined}>
+            {t.who && <span className="spk">{t.who}</span>}<p>{t.text.join(' ')}</p></div>
+        })}</div>
+      })}
+    </div>
+  )
+}
 
 function TitleEdit({ value, onDone }: { value: string; onDone: (v: string) => void }) {
   const [v, setV] = useState(value)

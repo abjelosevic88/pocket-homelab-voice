@@ -253,7 +253,10 @@ func mergeSpeakers(segs []speech.Segment) ([]speech.Segment, string) {
 const aiMeeting = `
 
 This memo is a recorded meeting or call. Its lines start with who spoke: "You:" is the person; the other labels are the other people on the call, by name when known, else "Speaker 1", "Speaker 2", … (or "Others" for all of them).
-- "text": the conversation cleaned up, keeping each turn's label exactly as it is at the start of the turn.
+- "text": the meeting as notes that are easy to read (the full words are kept elsewhere), covering the whole meeting from start to end:
+  - split into its topics: before each topic a line "## " and the topic in a few words ("## Small talk", "## Arno: test costs and tickets"), and a blank line between topics;
+  - one line per turn, starting with its label exactly as given ("You:", "Speaker 2:", a name); a speaker's lines that follow each other are one turn;
+  - each turn condensed to what matters, in one to three sentences in the speaker's voice: facts, numbers, names, questions, what they will do. Turns that add nothing ("yeah", "okay", small talk) are left out or folded into one short line. Never merge different speakers, and never change who said what.
 - "title": what the meeting was about.
 - "summary": three to five sentences: what was discussed and how it ended.
 - "decisions": what was decided, one short line each (empty when nothing was).

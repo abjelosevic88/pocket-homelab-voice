@@ -504,7 +504,38 @@ func (s *Server) findVoicesNow(ctx context.Context, uid, id int64) error {
 	}
 	s.log.Info("speakers found", "memo", id, "voices", len(cur.Speakers), "seconds", int(time.Since(t0).Seconds()), "transcript_changed", before != cur.Transcript)
 	s.hintsSoon(uid, id)
+	s.retidyIfOld(ctx, cur)
 	return nil
+}
+
+// oldTidy: the AI's tidy-up was written before the voices were told apart.
+func oldTidy(m *store.Memo) bool {
+	return len(m.Speakers) > 0 && (strings.HasPrefix(m.Tidy, speakerOthers+":") || strings.Contains(m.Tidy, "\n"+speakerOthers+":"))
+}
+
+// retidyIfOld writes a meeting's tidy-up again with its voices (when the
+// person has the AI tidy up).
+func (s *Server) retidyIfOld(ctx context.Context, m *store.Memo) {
+	if !oldTidy(m) {
+		return
+	}
+	if st, err := s.store.GetSettings(ctx, m.UserID); err == nil && st.AITidy {
+		s.log.Info("meeting: tidying up again with its voices", "memo", m.ID)
+		s.tidySoon(m.UserID, m.ID)
+	}
+}
+
+// retidyOld does that for every meeting whose tidy-up is from before.
+func (s *Server) retidyOld(ctx context.Context) {
+	list, err := s.store.MeetingsWithOldTidy(ctx)
+	if err != nil {
+		return
+	}
+	for _, x := range list {
+		if m, err := s.store.GetMemo(ctx, x.UserID, x.ID); err == nil {
+			s.retidyIfOld(ctx, m)
+		}
+	}
 }
 
 // keepNames carries the names the person gave over to a new split of the
