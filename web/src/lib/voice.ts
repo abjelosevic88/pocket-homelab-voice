@@ -65,6 +65,7 @@ export const statusLine = (m: Memo): string => {
     if (!p) return 'Writing it out…'
     if (p.stage === 'model') return `Getting the speech model ready${p.pct > 0 ? ` (${p.pct}%)` : '…'}`
     if (p.stage === 'preparing') return 'Getting the recording ready…'
+    if (p.stage === 'speakers') return 'Telling the voices on the call apart…'
     return p.pct > 0 ? `Writing it out… ${p.pct}%` : 'Writing it out…'
   }
   return ''

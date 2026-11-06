@@ -172,6 +172,9 @@ func (s *Server) process(ctx context.Context, m *store.Memo) {
 	if m.Transcript != "" && st.AITidy {
 		s.tidySoon(m.UserID, m.ID)
 	}
+	if len(m.Speakers) > 0 {
+		s.hintsSoon(m.UserID, m.ID)
+	}
 }
 
 // applyResult puts the words on the memo.

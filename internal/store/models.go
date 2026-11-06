@@ -57,6 +57,51 @@ type Segment struct {
 	Speaker string `json:"speaker,omitempty"` // meetings: You | Others
 }
 
+// Speaker states: how sure the name is.
+const (
+	SpeakerYou       = "you"       // the person, from their microphone
+	SpeakerConfirmed = "confirmed" // named or confirmed by the person
+	SpeakerAuto      = "auto"      // recognised by voice, surely
+	SpeakerSuggested = "suggested" // maybe someone: "Is this Alex?"
+	SpeakerUnknown   = "unknown"   // nobody known yet
+)
+
+// Speaker is one voice in a meeting. Key is what its segments carry ("You",
+// "S1", "S2", …); Name is who it is once known.
+type Speaker struct {
+	Key       string   `json:"key"`
+	Name      string   `json:"name"`
+	PersonID  int64    `json:"person_id,omitempty"`
+	State     string   `json:"state"`
+	Score     float64  `json:"score,omitempty"`   // how much the voice is like the person's (auto, suggested)
+	Suggest   string   `json:"suggest,omitempty"` // suggested: the name asked about
+	SuggestID int64    `json:"suggest_id,omitempty"`
+	Hint      string   `json:"hint,omitempty"`     // a name heard in the conversation for this voice
+	HintWhy   string   `json:"hint_why,omitempty"` // and why the AI thinks so
+	Rejected  []int64  `json:"rejected,omitempty"` // people the person said this is not
+	MS        int64    `json:"ms"`                 // how long they talked
+	Sample    [2]int64 `json:"sample"`             // a clear stretch of them, to listen to
+}
+
+// Person is someone whose voice the person named.
+type Person struct {
+	ID        int64   `json:"id"`
+	UserID    int64   `json:"-"`
+	Name      string  `json:"name"`
+	Voices    []Voice `json:"-"`
+	CreatedAt string  `json:"created_at"`
+	UpdatedAt string  `json:"updated_at"`
+}
+
+// Voice is one voice print of a person, from one meeting.
+type Voice struct {
+	Emb    []float32 `json:"emb"`
+	MS     int64     `json:"ms"`
+	MemoID int64     `json:"memo_id"`
+	At     string    `json:"at"`
+	Auto   bool      `json:"auto,omitempty"` // learned from a sure recognition, not named by the person
+}
+
 // Action is something the AI found in a memo that belongs in another app:
 // a task, an appointment, a line for today's note, money spent.
 type Action struct {
@@ -117,8 +162,13 @@ type Memo struct {
 	AudioAt     string    `json:"-"`             // where it is kept: "" this box, else a place key
 	AudioAway   string    `json:"-"`             // its path in that place
 	AudioWhere  string    `json:"audio_where"`   // where it is kept, for people ("" = this box)
-	CreatedAt   string    `json:"created_at"`
-	UpdatedAt   string    `json:"updated_at"`
+	// Meetings: the voices on the call, with names once known.
+	Speakers       []Speaker            `json:"speakers"`
+	SpeakerVoices  map[string][]float32 `json:"-"`               // voice print per speaker key; stays on this box
+	SpeakersStatus string               `json:"speakers_status"` // "" | working | done | failed
+	SpeakersError  string               `json:"speakers_error"`
+	CreatedAt      string               `json:"created_at"`
+	UpdatedAt      string               `json:"updated_at"`
 
 	// Filled by listings.
 	Sent []Sent `json:"sent"`

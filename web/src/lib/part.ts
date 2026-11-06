@@ -1,16 +1,34 @@
 // Who spoke when, and parts of a recording: the stretches each speaker talked
 // (for the lanes under the waveform), how long each of them talked in a part,
 // and a part as it goes in the address (?part=750-1125, in seconds).
-import type { Segment } from './types'
+import type { Memo, Segment, Speaker } from './types'
 import { clock } from './voice'
 
 export interface Range { from: number; to: number }
-export type Who = '' | 'You' | 'Others'
+/** A speaker's key ('You', 'S1', …; 'Others' in meetings written before voices were told apart), '' = everyone. */
+export type Who = string
 export interface Span { s: number; e: number }
 
-export const SPEAKERS = ['You', 'Others'] as const
-
 export const hasSpeakers = (segs: Segment[]) => segs.some(s => s.speaker)
+
+/** A voice as shown: its label, its colour, and the speaker behind it. */
+export interface Voice { key: string; label: string; color: string; speaker?: Speaker }
+
+const YOU = '#3b82f6'
+const PALETTE = ['#f97316', '#22c55e', '#a855f7', '#06b6d4', '#eab308', '#ec4899', '#6366f1', '#84cc16', '#ef4444', '#14b8a6']
+
+export const speakerName = (sp: Speaker) => sp.key === 'You' ? 'You' : sp.name || `Speaker ${sp.key.replace(/^S/, '')}`
+
+/** The voices of a memo, you first, each with its colour. */
+export function voices(m: Memo): Voice[] {
+  if (m.speakers?.length) {
+    let i = 0
+    return m.speakers.map(sp => ({ key: sp.key, label: speakerName(sp), speaker: sp, color: sp.key === 'You' ? YOU : PALETTE[i++ % PALETTE.length] }))
+  }
+  const keys = [...new Set(m.segments.map(s => s.speaker || '').filter(Boolean))].sort((a, b) => (a === 'You' ? -1 : b === 'You' ? 1 : a.localeCompare(b)))
+  let i = 0
+  return keys.map(k => ({ key: k, label: k, color: k === 'You' ? YOU : PALETTE[i++ % PALETTE.length] }))
+}
 
 /** Each speaker's segments joined into stretches; gaps shorter than `gap` ms close up. */
 export function speakerSpans(segs: Segment[], gap = 1200): Record<string, Span[]> {
@@ -39,21 +57,20 @@ export function inRange(segs: Segment[], r: Range): [Segment, number][] {
   return out
 }
 
-/** Who was talking at `ms`: '' when nobody, 'both' when they talked over each other. */
-export function speakerAt(spans: Record<string, Span[]>, ms: number): string {
-  const on = SPEAKERS.filter(w => (spans[w] || []).some(x => ms >= x.s && ms < x.e))
-  return on.length === 2 ? 'both' : on[0] || ''
+/** The keys of who was talking at `ms`. */
+export function speakersAt(spans: Record<string, Span[]>, ms: number): string[] {
+  return Object.keys(spans).filter(k => spans[k].some(x => ms >= x.s && ms < x.e))
 }
 
 /** The part as words to paste: "[12:30] You: …", one line per turn. */
-export function partText(segs: Segment[]): string {
+export function partText(segs: Segment[], label: (key: string) => string = k => k): string {
   const lines: string[] = []
   let cur: string | null = null
   for (const s of segs) {
     const t = s.t.trim()
     if (!t) continue
     const who = s.speaker || ''
-    if (who !== cur || !lines.length) { lines.push(`[${clock(s.s)}] ${who ? who + ': ' : ''}${t}`); cur = who }
+    if (who !== cur || !lines.length) { lines.push(`[${clock(s.s)}] ${who ? label(who) + ': ' : ''}${t}`); cur = who }
     else lines[lines.length - 1] += ' ' + t
   }
   return lines.join('\n')

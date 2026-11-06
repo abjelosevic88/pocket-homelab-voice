@@ -63,12 +63,15 @@ type Config struct {
 	WhisperBin     string
 	ParakeetBin    string
 	FFmpegBin      string
-	WhisperModel   string // the box default until an admin picks one in Settings
+	WhisperModel   string   // the box default until an admin picks one in Settings
 	StorageRoots   []string // server folders people may keep recordings in (STORAGE_ROOTS, e.g. a NAS mount)
 	WhisperThreads int      // dictation
-	BackThreads    int // memos and meetings, at the lowest priority
+	BackThreads    int      // memos and meetings, at the lowest priority
 	ModelsDir      string
 	ModelBaseURL   string
+	// Who spoke when in a meeting: python3 with numpy and onnxruntime (in the
+	// Docker image) runs the speaker models, kept under ModelsDir/speakers.
+	SpeakersPython string
 	AudioDir       string
 	MaxAudioBytes  int64
 
@@ -176,6 +179,7 @@ func Load() (*Config, error) {
 		WhisperThreads: envInt("WHISPER_THREADS", 0),
 		BackThreads:    envInt("WHISPER_BG_THREADS", 0),
 		ModelsDir:      env("MODELS_DIR", dataDir+"/models"),
+		SpeakersPython: env("SPEAKERS_PYTHON", "python3"),
 		ModelBaseURL:   strings.TrimRight(env("MODEL_BASE_URL", "https://huggingface.co/ggerganov/whisper.cpp/resolve/main"), "/"),
 		AudioDir:       env("AUDIO_DIR", dataDir+"/audio"),
 		MaxAudioBytes:  envInt64("MAX_AUDIO_BYTES", 512<<20),

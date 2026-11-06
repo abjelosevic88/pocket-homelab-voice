@@ -84,7 +84,37 @@ func (s *Server) writeOutMeeting(ctx context.Context, m *store.Memo, path, mono 
 		}
 	}
 	out.Segments, out.Text = mergeSpeakers(dropEcho(all))
+	if voiced[1] >= minVoicedMS {
+		s.splitVoices(ctx, m, out, right)
+	}
 	return out, nil
+}
+
+// splitVoices tells the voices on the call apart and names them (when this
+// box can); out's segments then carry S1, S2, … and its text their names.
+func (s *Server) splitVoices(ctx context.Context, m *store.Memo, out *speech.Result, right string) {
+	if ok, why := s.speakersAvailable(); !ok {
+		s.log.Debug("meeting: voices not split", "memo", m.ID, "why", why)
+		return
+	}
+	s.setProgress(m.ID, "speakers", -1)
+	segs := make([]store.Segment, len(out.Segments))
+	for i, sg := range out.Segments {
+		segs[i] = store.Segment{Start: sg.Start, End: sg.End, Text: sg.Text, Speaker: sg.Speaker}
+	}
+	t0 := time.Now()
+	segs, err := s.findVoices(ctx, m, segs, right)
+	if err != nil {
+		s.log.Warn("meeting: voices", "memo", m.ID, "err", err)
+		m.SpeakersStatus, m.SpeakersError = "failed", err.Error()
+		return
+	}
+	out.Segments = make([]speech.Segment, len(segs))
+	for i, sg := range segs {
+		out.Segments[i] = speech.Segment{Start: sg.Start, End: sg.End, Text: sg.Text, Speaker: sg.Speaker}
+	}
+	out.Text = conversation(segs, func(k string) string { return speakerLabel(m, k) })
+	s.log.Info("meeting: voices found", "memo", m.ID, "voices", len(m.Speakers), "seconds", int(time.Since(t0).Seconds()))
 }
 
 // ---- echo ----
@@ -107,7 +137,7 @@ func echoWords(t string) []string { return wordRe.FindAllString(strings.ToLower(
 func dropEcho(segs []speech.Segment) []speech.Segment {
 	var others []speech.Segment
 	for _, sg := range segs {
-		if sg.Speaker == speakerOthers {
+		if sg.Speaker != speakerYou {
 			others = append(others, sg)
 		}
 	}
@@ -168,12 +198,12 @@ func (s *Server) cleanEcho(ctx context.Context) {
 		if len(kept) == len(segs) {
 			continue
 		}
-		kept, text := mergeSpeakers(kept)
+		kept, _ = mergeSpeakers(kept)
 		m.Segments = make([]store.Segment, len(kept))
 		for i, sg := range kept {
 			m.Segments[i] = store.Segment{Start: sg.Start, End: sg.End, Text: sg.Text, Speaker: sg.Speaker}
 		}
-		m.Transcript = text
+		m.Transcript = conversation(m.Segments, func(k string) string { return speakerLabel(m, k) })
 		if err := s.store.SaveMemo(ctx, x.UserID, m); err != nil {
 			s.log.Warn("echo: save", "memo", m.ID, "err", err)
 			continue
@@ -222,8 +252,8 @@ func mergeSpeakers(segs []speech.Segment) ([]speech.Segment, string) {
 
 const aiMeeting = `
 
-This memo is a recorded meeting or call. Its lines start with who spoke: "You:" is the person, "Others:" the other people on the call.
-- "text": the conversation cleaned up, keeping the "You:" / "Others:" labels at the start of each turn.
+This memo is a recorded meeting or call. Its lines start with who spoke: "You:" is the person; the other labels are the other people on the call, by name when known, else "Speaker 1", "Speaker 2", … (or "Others" for all of them).
+- "text": the conversation cleaned up, keeping each turn's label exactly as it is at the start of the turn.
 - "title": what the meeting was about.
 - "summary": three to five sentences: what was discussed and how it ended.
 - "decisions": what was decided, one short line each (empty when nothing was).

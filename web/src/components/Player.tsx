@@ -1,13 +1,13 @@
 // The player: play/pause, the waveform — tap to jump, drag across it to pick a
 // part — ten seconds back and forward, and the speed. In a meeting the bars
-// take the colour of who was talking, two lanes under them show exactly where
-// you and the others spoke, and a chip per speaker shows how much each talked;
+// take the colour of who was talking, a lane per voice under them shows
+// exactly where each spoke, and a chip per voice shows how much each talked;
 // tap one to light up only their turns and step through them. The words
 // below follow along.
 import { useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef } from 'react'
 import type { Memo } from '../lib/types'
 import { clock } from '../lib/voice'
-import { SPEAKERS, hasSpeakers, speakerAt, speakerSpans, within, type Range, type Who } from '../lib/part'
+import { hasSpeakers, speakersAt, speakerSpans, voices, within, type Range, type Who } from '../lib/part'
 import { useApp } from '../lib/app-context'
 import { Icon } from './icons'
 import { useIsMobile } from './ui'
@@ -82,16 +82,24 @@ export const Player = forwardRef<PlayerHandle, {
   const spans = useMemo(() => speakerSpans(memo.segments), [memo.segments])
   const turns = useMemo(() => speakerSpans(memo.segments, 4000), [memo.segments])
   const bars = peaks.length
+  const vs = useMemo(() => voices(memo), [memo])
+  const color = useMemo(() => Object.fromEntries(vs.map(v => [v.key, v.color])), [vs])
+  const label = (k: string) => vs.find(v => v.key === k)?.label || k
+  // each bar: who talked most in its stretch
   const barWho = useMemo(() => {
     if (!meeting) return []
     const step = total / bars
     return Array.from({ length: bars }, (_, i) => {
-      const you = within(spans.You, i * step, (i + 1) * step), others = within(spans.Others, i * step, (i + 1) * step)
-      return you === 0 && others === 0 ? '' : you >= others ? 'you' : 'others'
+      let best = '', most = 0
+      for (const v of vs) {
+        const ms = within(spans[v.key], i * step, (i + 1) * step)
+        if (ms > most) { best = v.key; most = ms }
+      }
+      return best
     })
-  }, [meeting, spans, total, bars])
-  const talked = useMemo(() => Object.fromEntries(SPEAKERS.map(w => [w, within(spans[w], 0, Infinity)])), [spans])
-  const talkTotal = (talked.You || 0) + (talked.Others || 0) || 1
+  }, [meeting, spans, total, bars, vs])
+  const talked = useMemo(() => Object.fromEntries(vs.map(v => [v.key, within(spans[v.key], 0, Infinity)])), [spans, vs])
+  const talkTotal = Object.values(talked).reduce((a, b) => a + b, 0) || 1
 
   const fromX = (clientX: number) => {
     const r = wave.current!.getBoundingClientRect()
@@ -151,9 +159,9 @@ export const Player = forwardRef<PlayerHandle, {
       </div>
     )
   }
-  const hoverWho = hover !== null && meeting ? speakerAt(spans, hover) : ''
+  const hoverWho = hover !== null && meeting ? speakersAt(spans, hover).map(label).join(' + ') : ''
   return (
-    <div className={`player ${meeting ? 'has-talk' : ''} ${focus ? `focus-${focus.toLowerCase()}` : ''}`}>
+    <div className={`player ${meeting ? 'has-talk' : ''} ${focus ? 'focused' : ''}`}>
       <audio ref={audio} src={memo.audio_url} preload="metadata"
         onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)} onError={() => setFailed(true)}
         onLoadedMetadata={e => { const d = e.currentTarget.duration; if (isFinite(d) && d > 0) setDur(Math.round(d * 1000)); e.currentTarget.playbackRate = speed }}
@@ -177,22 +185,28 @@ export const Player = forwardRef<PlayerHandle, {
             seek(to)
           }}>
           <div className="wave">
-            {peaks.map((p, i) => <span key={i} className={`${i / bars < at ? 'on' : ''} ${barWho[i] || ''}`} style={{ height: `${Math.max(6, p)}%` }} />)}
+            {peaks.map((p, i) => {
+              const k = barWho[i]
+              return <span key={i} className={`${i / bars < at ? 'on' : ''} ${k ? 'talk' : ''} ${focus && k !== focus ? 'dim' : ''}`}
+                style={{ height: `${Math.max(6, p)}%`, ...(k ? { '--c': color[k] } : {}) } as React.CSSProperties} />
+            })}
           </div>
           {meeting && <div className="lanes" aria-hidden="true">
-            {SPEAKERS.map(w => <div key={w} className={`lane ${w.toLowerCase()}`}>{(spans[w] || []).map((x, i) => <i key={i} style={{ left: pct(x.s), width: pct(x.e - x.s) }} />)}</div>)}
+            {vs.map(v => <div key={v.key} className={`lane ${focus === v.key ? 'lit' : focus ? 'dim' : ''}`} style={{ '--c': v.color } as React.CSSProperties} title={v.label}>
+              {(spans[v.key] || []).map((x, i) => <i key={i} style={{ left: pct(x.s), width: pct(x.e - x.s) }} />)}</div>)}
           </div>}
           {range && <div className="part-sel" style={{ left: pct(range.from), width: pct(range.to - range.from) }}><i className="edge" /><i className="edge r" /></div>}
           <div className="playhead" style={{ left: pct(t) }} />
-          {hover !== null && !dragging && <div className="hover-at" style={{ left: pct(hover) }}><span className="tnum">{clock(hover)}{hoverWho === 'both' ? ' · both' : hoverWho ? ` · ${hoverWho}` : ''}</span></div>}
+          {hover !== null && !dragging && <div className="hover-at" style={{ left: pct(hover) }}><span className="tnum">{clock(hover)}{hoverWho ? ` · ${hoverWho}` : ''}</span></div>}
         </div>
         {meeting && <div className="talk-legend">
-          {SPEAKERS.map(w => {
-            const ms = talked[w] || 0
+          {vs.map(v => {
+            const ms = talked[v.key] || 0
             return (
-              <button key={w} type="button" className={`talk-chip ${w.toLowerCase()} ${focus === w ? 'on' : ''}`} aria-pressed={focus === w}
-                onClick={() => onFocus?.(focus === w ? '' : w)} title={focus === w ? 'Show everyone' : w === 'You' ? 'Light up where you spoke' : 'Light up where the others spoke'}>
-                <i />{w}<b className="tnum">{Math.round(ms / talkTotal * 100)}%</b><span className="muted tnum">{clock(ms)}</span>
+              <button key={v.key} type="button" className={`talk-chip ${focus === v.key ? 'on' : ''} ${v.speaker && v.speaker.state !== 'you' && !v.speaker.name ? 'unnamed' : ''}`} aria-pressed={focus === v.key}
+                style={{ '--c': v.color } as React.CSSProperties}
+                onClick={() => onFocus?.(focus === v.key ? '' : v.key)} title={focus === v.key ? 'Show everyone' : v.key === 'You' ? 'Light up where you spoke' : `Light up where ${v.label} spoke`}>
+                <i />{v.label}<b className="tnum">{Math.round(ms / talkTotal * 100)}%</b><span className="muted tnum">{clock(ms)}</span>
               </button>
             )
           })}
