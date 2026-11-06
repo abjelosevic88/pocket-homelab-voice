@@ -473,3 +473,24 @@ func (s *Store) AudioFiles(ctx context.Context, uid int64) map[string]bool {
 	}
 	return out
 }
+
+// MemoRef points at one person's memo.
+type MemoRef struct{ ID, UserID int64 }
+
+// MeetingMemos are every meeting written out and not corrected by hand.
+func (s *Store) MeetingMemos(ctx context.Context) ([]MemoRef, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT id, user_id FROM memos WHERE meeting=1 AND edited=0 AND status='done' ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []MemoRef
+	for rows.Next() {
+		var r MemoRef
+		if err := rows.Scan(&r.ID, &r.UserID); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}

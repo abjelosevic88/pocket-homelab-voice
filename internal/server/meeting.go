@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -18,7 +19,8 @@ import (
 // Pocket Launcher records a call as stereo: the person's microphone on the
 // left ("You"), the computer's sound — the others on the call — on the right
 // ("Others"). Each channel is written out on its own, with its quiet stretches
-// silenced, and the two are merged by time into one conversation.
+// silenced (and, on the person's side, the call heard back through the
+// speakers), and the two are merged by time into one conversation.
 
 const (
 	speakerYou    = "You"
@@ -42,10 +44,14 @@ func (s *Server) writeOutMeeting(ctx context.Context, m *store.Memo, path, mono 
 		s.log.Warn("meeting: stereo", "memo", m.ID, "err", err)
 		return single()
 	}
-	channels, voiced, err := speech.SplitStereo(stereo, left, right)
+	channels, voiced, echo, err := speech.SplitStereo(stereo, left, right)
 	if err != nil || channels != 2 {
 		// not stereo: one voice, written out as any memo
 		return single()
+	}
+	if echo > 0 {
+		// the call heard back through the speakers, taken off the person's side
+		s.log.Info("meeting: echo removed", "memo", m.ID, "echo_s", echo/1000, "you_s", voiced[0]/1000)
 	}
 	type part struct {
 		file, speaker string
@@ -77,8 +83,107 @@ func (s *Server) writeOutMeeting(ctx context.Context, m *store.Memo, path, mono 
 			out = &speech.Result{Language: lang, Engine: res.Engine}
 		}
 	}
-	out.Segments, out.Text = mergeSpeakers(all)
+	out.Segments, out.Text = mergeSpeakers(dropEcho(all))
 	return out, nil
+}
+
+// ---- echo ----
+//
+// Without headphones the microphone hears the call too, so the person's
+// channel repeats what the others said a moment earlier. A segment of the
+// person's is an echo when most of its words were said by the others around
+// the same time; echoes are dropped, so "You" is only what the person said.
+
+const (
+	echoWindowMS = 4000 // the others' words this close in time count
+	echoShare    = 0.6  // this share of the words heard from the others: an echo
+)
+
+var wordRe = regexp.MustCompile(`[\p{L}\p{N}']+`)
+
+func echoWords(t string) []string { return wordRe.FindAllString(strings.ToLower(t), -1) }
+
+// dropEcho leaves out the person's segments that repeat the others.
+func dropEcho(segs []speech.Segment) []speech.Segment {
+	var others []speech.Segment
+	for _, sg := range segs {
+		if sg.Speaker == speakerOthers {
+			others = append(others, sg)
+		}
+	}
+	if len(others) == 0 {
+		return segs
+	}
+	out := segs[:0:0]
+	for _, sg := range segs {
+		if sg.Speaker == speakerYou && isEcho(sg, others) {
+			continue
+		}
+		out = append(out, sg)
+	}
+	return out
+}
+
+func isEcho(sg speech.Segment, others []speech.Segment) bool {
+	ws := echoWords(sg.Text)
+	if len(ws) == 0 {
+		return false
+	}
+	heard := map[string]bool{}
+	for _, o := range others {
+		if o.End > sg.Start-echoWindowMS && o.Start < sg.End+echoWindowMS {
+			for _, w := range echoWords(o.Text) {
+				heard[w] = true
+			}
+		}
+	}
+	n := 0
+	for _, w := range ws {
+		if heard[w] {
+			n++
+		}
+	}
+	return float64(n) >= echoShare*float64(len(ws))
+}
+
+// cleanEcho takes the echo out of meetings written out before it was caught,
+// once; meetings whose words the person corrected are left alone.
+func (s *Server) cleanEcho(ctx context.Context) {
+	list, err := s.store.MeetingMemos(ctx)
+	if err != nil {
+		s.log.Warn("echo: list meetings", "err", err)
+		return
+	}
+	cleaned := 0
+	for _, x := range list {
+		m, err := s.store.GetMemo(ctx, x.UserID, x.ID)
+		if err != nil || m.Edited || m.Status != "done" {
+			continue
+		}
+		segs := make([]speech.Segment, len(m.Segments))
+		for i, sg := range m.Segments {
+			segs[i] = speech.Segment{Start: sg.Start, End: sg.End, Text: sg.Text, Speaker: sg.Speaker}
+		}
+		kept := dropEcho(segs)
+		if len(kept) == len(segs) {
+			continue
+		}
+		kept, text := mergeSpeakers(kept)
+		m.Segments = make([]store.Segment, len(kept))
+		for i, sg := range kept {
+			m.Segments[i] = store.Segment{Start: sg.Start, End: sg.End, Text: sg.Text, Speaker: sg.Speaker}
+		}
+		m.Transcript = text
+		if err := s.store.SaveMemo(ctx, x.UserID, m); err != nil {
+			s.log.Warn("echo: save", "memo", m.ID, "err", err)
+			continue
+		}
+		s.log.Info("echo taken out of a meeting", "memo", m.ID, "segments", len(segs)-len(kept))
+		cleaned++
+	}
+	if cleaned > 0 {
+		s.log.Info("echo cleaned", "meetings", cleaned)
+	}
 }
 
 // mergeSpeakers orders both speakers' segments by time and writes the

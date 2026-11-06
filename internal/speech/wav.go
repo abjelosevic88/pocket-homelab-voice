@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"sort"
 )
 
 // WAVInfo reads a 16-bit PCM WAV: how long it is and the loudness of each
@@ -183,12 +184,14 @@ const SilenceLevel = 0.008
 // SplitStereo writes the two channels of a 16-bit stereo WAV as mono WAVs,
 // with near-silent stretches (100 ms windows, kept 200 ms around speech)
 // made fully silent so the speech model does not invent words in them.
-// voicedMS is how much of each channel has sound. A recording that is not
-// stereo answers channels and writes nothing.
-func SplitStereo(in, left, right string) (channels int, voicedMS [2]int64, err error) {
+// On the left (a meeting's microphone) the stretches that only hold the call
+// coming back through the speakers are silenced too (see echoOnly); echoMS is
+// how much of it that was. voicedMS is how much of each channel has sound. A
+// recording that is not stereo answers channels and writes nothing.
+func SplitStereo(in, left, right string) (channels int, voicedMS [2]int64, echoMS int64, err error) {
 	f, err := os.Open(in)
 	if err != nil {
-		return 0, voicedMS, err
+		return 0, voicedMS, 0, err
 	}
 	defer f.Close()
 	fi, _ := f.Stat()
@@ -196,7 +199,7 @@ func SplitStereo(in, left, right string) (channels int, voicedMS [2]int64, err e
 	hr := &countReader{r: f}
 	rate, channels, _, size, err := wavHeader(hr, fi.Size())
 	if err != nil || channels != 2 {
-		return channels, voicedMS, err
+		return channels, voicedMS, echoMS, err
 	}
 	dataStart := hr.n
 	if size > fi.Size()-dataStart {
@@ -207,6 +210,7 @@ func SplitStereo(in, left, right string) (channels int, voicedMS [2]int64, err e
 	frames := size / 4
 	// pass 1: how loud each window of each channel is
 	var loud [2][]bool
+	var level [2][]float64
 	buf := make([]byte, 4*win)
 	for done := int64(0); done < frames; done += int64(win) {
 		n, rerr := io.ReadFull(r, buf)
@@ -222,10 +226,18 @@ func SplitStereo(in, left, right string) (channels int, voicedMS [2]int64, err e
 			}
 		}
 		for c := 0; c < 2; c++ {
-			loud[c] = append(loud[c], math.Sqrt(sum[c]/float64(k)) >= SilenceLevel)
+			rms := math.Sqrt(sum[c] / float64(k))
+			level[c] = append(level[c], rms)
+			loud[c] = append(loud[c], rms >= SilenceLevel)
 		}
 		if rerr != nil {
 			break
+		}
+	}
+	for i, echo := range echoOnly(level[0], level[1]) {
+		if echo && loud[0][i] {
+			loud[0][i] = false
+			echoMS += int64(win) * 1000 / int64(rate)
 		}
 	}
 	keep := func(c, i int) bool {
@@ -238,14 +250,14 @@ func SplitStereo(in, left, right string) (channels int, voicedMS [2]int64, err e
 	}
 	// pass 2: write each channel, silence where it is quiet
 	if _, err := f.Seek(dataStart, io.SeekStart); err != nil {
-		return channels, voicedMS, err
+		return channels, voicedMS, echoMS, err
 	}
 	r = bufio.NewReader(f)
 	outs := [2]*os.File{}
 	for c, p := range []string{left, right} {
 		o, err := os.Create(p)
 		if err != nil {
-			return channels, voicedMS, err
+			return channels, voicedMS, echoMS, err
 		}
 		defer o.Close()
 		outs[c] = o
@@ -253,7 +265,7 @@ func SplitStereo(in, left, right string) (channels int, voicedMS [2]int64, err e
 	ws := [2]*bufio.Writer{bufio.NewWriter(outs[0]), bufio.NewWriter(outs[1])}
 	for c := 0; c < 2; c++ {
 		if err := writeWAVHeader(ws[c], rate, frames*2); err != nil {
-			return channels, voicedMS, err
+			return channels, voicedMS, echoMS, err
 		}
 	}
 	mono := make([]byte, 2*win)
@@ -277,7 +289,7 @@ func SplitStereo(in, left, right string) (channels int, voicedMS [2]int64, err e
 				}
 			}
 			if _, err := ws[c].Write(mono[:2*k]); err != nil {
-				return channels, voicedMS, err
+				return channels, voicedMS, echoMS, err
 			}
 		}
 		written += int64(k)
@@ -287,14 +299,57 @@ func SplitStereo(in, left, right string) (channels int, voicedMS [2]int64, err e
 	}
 	for c := 0; c < 2; c++ {
 		if err := ws[c].Flush(); err != nil {
-			return channels, voicedMS, err
+			return channels, voicedMS, echoMS, err
 		}
 		if written != frames { // a short file: fix the sizes
 			_, _ = outs[c].Seek(0, io.SeekStart)
 			_ = writeWAVHeader(outs[c], rate, written*2)
 		}
 	}
-	return channels, voicedMS, nil
+	return channels, voicedMS, echoMS, nil
+}
+
+// echoMargin is how much louder than the call's echo the microphone must be
+// for a stretch to count as the person talking (dB).
+const echoMargin = 9.0
+
+// echoOnly marks the 100 ms windows of a meeting's microphone (mic, RMS per
+// window) that hold nothing but the call (call, the computer's sound) heard
+// back through the speakers: no louder than the call around them (±200 ms, as
+// the two sides of a recording drift a little apart) times how much of the
+// call this microphone picks up, plus echoMargin. That pickup is measured on
+// the recording itself, as the usual difference wherever the call is loud.
+// Nothing is marked when there is too little call to tell (under 30 s) or the
+// microphone hardly hears it (headphones).
+func echoOnly(mic, call []float64) []bool {
+	n := min(len(mic), len(call))
+	db := func(v float64) float64 { return 20 * math.Log10(v+1e-9) }
+	near := make([]float64, n)
+	for i := 0; i < n; i++ {
+		near[i] = -200
+		for j := max(0, i-2); j <= min(n-1, i+2); j++ {
+			near[i] = max(near[i], db(call[j]))
+		}
+	}
+	var diffs []float64
+	for i := 0; i < n; i++ {
+		if near[i] > -35 && db(mic[i]) > -70 {
+			diffs = append(diffs, db(mic[i])-near[i])
+		}
+	}
+	if len(diffs) < 300 {
+		return nil
+	}
+	sort.Float64s(diffs)
+	pickup := diffs[len(diffs)/2]
+	if pickup < -30 {
+		return nil
+	}
+	out := make([]bool, n)
+	for i := 0; i < n; i++ {
+		out[i] = near[i] > -45 && db(mic[i]) <= near[i]+pickup+echoMargin
+	}
+	return out
 }
 
 type countReader struct {

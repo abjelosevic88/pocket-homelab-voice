@@ -98,6 +98,7 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 		}
 	}
 	_ = s.store.PurgeSessions(ctx)
+	s.cleanEcho(ctx)
 	go s.janitor(ctx)
 	go s.worker(ctx)
 	if s.core.Configured() {

@@ -1,11 +1,12 @@
 // One memo: the recording, the words that follow along as it plays, the
 // tidy version, what the AI found in it and where it went.
-import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import { announceChange } from '../lib/data'
-import type { Action, Memo } from '../lib/types'
+import type { Action, Memo, Segment } from '../lib/types'
+import { SPEAKERS, hasSpeakers, inRange, length, parsePart, partParam, partText, speakerSpans, within, type Range, type Who } from '../lib/part'
 import { fmtDate, fmtISOTime } from '../lib/format'
 import { APPS, KINDS, clock, kindIcon, langName, localDay, sentLabel, statusLine } from '../lib/voice'
 import { useCrumb } from '../components/Layout'
@@ -28,7 +29,20 @@ export default function MemoPage() {
   const [again, setAgain] = useState(false)
   const [editing, setEditing] = useState<'' | 'title' | 'words' | 'tidy'>('')
   const player = useRef<PlayerHandle>(null)
+  const [sp, setSp] = useSearchParams()
+  const [range, setRange] = useState<Range | null>(null)
+  const [focus, setFocus] = useState<Who>('')
   useCrumb(m?.title || (m ? 'Memo' : undefined))
+  // a part picked on the waveform lives in the address (?part=750-1125), so a link opens on it
+  const partArg = sp.get('part')
+  useEffect(() => { if (m) setRange(parsePart(partArg, m.duration_ms)) }, [m?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!m) return
+    const v = range ? partParam(range) : null
+    if (v === partArg) return
+    const h = window.setTimeout(() => setSp(p => { const n = new URLSearchParams(p); if (v) n.set('part', v); else n.delete('part'); return n }, { replace: true }), 300)
+    return () => window.clearTimeout(h)
+  }, [range]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = () => api.get<Memo>(`${V1}/memos/${id}`).then(x => { setM(x); setErr('') }).catch(e => setErr((e as Error).message))
   useEffect(() => { setM(null); load() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -44,6 +58,7 @@ export default function MemoPage() {
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
+      if (e.key === 'Escape' && !document.querySelector('.modal-backdrop, .menu') && !t.closest('input, textarea')) { setRange(null); return }
       if (e.key !== ' ' || t.closest('input, textarea, button, [contenteditable="true"], [role="slider"]') || document.querySelector('.modal-backdrop')) return
       e.preventDefault(); player.current?.toggle()
     }
@@ -110,7 +125,10 @@ export default function MemoPage() {
         </div>
       </div>}
 
-      <div className="card pad-card"><Player ref={player} memo={m} onTime={setTime} /></div>
+      <div className="card pad-card"><Player ref={player} memo={m} onTime={setTime} range={range} onRange={setRange} focus={focus} onFocus={setFocus} /></div>
+
+      {range && m.has_audio && <PartPanel memo={m} range={range} time={time} focus={focus} onClear={() => setRange(null)}
+        onPlay={() => player.current?.playRange(range)} onSeek={ms => player.current?.seek(ms, true)} />}
 
       {(m.actions.length > 0 || m.ai_status === 'working') && <Suggestions memo={m} onSend={(t, i) => setSend({ t, action: i })} onSkip={skip} />}
 
@@ -126,7 +144,7 @@ export default function MemoPage() {
           {tab === 'tidy' && (editing === 'tidy' ? <TextEdit value={m.tidy} onDone={v => { setEditing(''); if (v !== null && v !== m.tidy) save({ tidy: v }, 'Saved') }} />
             : m.tidy ? <Prose text={m.tidy} /> : <TidyEmpty memo={m} onTidy={tidyNow} />)}
           {tab === 'words' && (editing === 'words' ? <TextEdit value={m.transcript} onDone={v => { setEditing(''); if (v !== null && v !== m.transcript) save({ transcript: v }, 'Saved') }} />
-            : <Words memo={m} time={time} onSeek={ms => player.current?.seek(ms, true)} />)}
+            : <Words memo={m} time={time} focus={focus} onSeek={ms => player.current?.seek(ms, true)} />)}
         </div>
       </section>
 
@@ -197,42 +215,97 @@ function TextEdit({ value, onDone }: { value: string; onDone: (v: string | null)
 }
 
 /** The words as said, sentence by sentence; tap one to hear it. */
-function Words({ memo: m, time, onSeek }: { memo: Memo; time: number; onSeek: (ms: number) => void }) {
+function Words({ memo: m, time, focus, onSeek }: { memo: Memo; time: number; focus: Who; onSeek: (ms: number) => void }) {
   if (m.status !== 'done' && !m.transcript) return <p className="muted">The words appear here once the recording is written out.</p>
   if (!m.transcript) return <p className="muted">Nothing was said in this recording.</p>
   if (m.edited || !m.segments.length || !m.has_audio) return <Prose text={m.transcript} />
-  const seg = (s: Memo['segments'][number], i: number) => {
-    const on = time >= s.s && time < (m.segments[i + 1]?.s ?? s.e + 1500)
+  return <Said segs={m.segments} items={m.segments.map((s, i) => [s, i])} time={time} focus={focus} onSeek={onSeek} />
+}
+
+/** Segments that follow the playback; in a meeting turn by turn with who spoke,
+ *  the other speaker's turns dimmed while one is lit up. */
+function Said({ segs, items, time, focus = '', onSeek }: { segs: Segment[]; items: [Segment, number][]; time: number; focus?: Who; onSeek: (ms: number) => void }) {
+  const seg = ([s, i]: [Segment, number]) => {
+    const on = time >= s.s && time < (segs[i + 1]?.s ?? s.e + 1500)
     return <span key={i} className={`seg ${on ? 'on' : ''}`} onClick={() => onSeek(s.s)} role="button" tabIndex={0} title={clock(s.s)}
       onKeyDown={e => { if (e.key === 'Enter') onSeek(s.s) }}>{s.t} </span>
   }
-  // a meeting: turn by turn, who spoke
-  if (m.segments.some(s => s.speaker)) {
-    const turns: { speaker: string; items: [Memo['segments'][number], number][] }[] = []
-    m.segments.forEach((s, i) => {
-      const who = s.speaker || ''
-      if (!turns.length || turns[turns.length - 1].speaker !== who) turns.push({ speaker: who, items: [] })
-      turns[turns.length - 1].items.push([s, i])
-    })
-    return (
-      <div className="turns">
-        {turns.map((t, k) => (
-          <div key={k} className={`turn ${speakerClass(t.speaker)}`}>
-            <span className="spk">{t.speaker || '—'}</span>
-            <p className="memo-words">{t.items.map(([s, i]) => seg(s, i))}</p>
-          </div>
-        ))}
-      </div>
-    )
+  if (!items.some(([s]) => s.speaker)) return <p className="memo-words">{items.map(seg)}</p>
+  const turns: { speaker: string; items: [Segment, number][] }[] = []
+  for (const x of items) {
+    const who = x[0].speaker || ''
+    if (!turns.length || turns[turns.length - 1].speaker !== who) turns.push({ speaker: who, items: [] })
+    turns[turns.length - 1].items.push(x)
   }
   return (
-    <p className="memo-words">
-      {m.segments.map((s, i) => {
-        const on = time >= s.s && time < (m.segments[i + 1]?.s ?? s.e + 1500)
-        return <span key={i} className={`seg ${on ? 'on' : ''}`} onClick={() => onSeek(s.s)} role="button" tabIndex={0} title={clock(s.s)}
-          onKeyDown={e => { if (e.key === 'Enter') onSeek(s.s) }}>{s.t} </span>
-      })}
-    </p>
+    <div className="turns">
+      {turns.map((t, k) => (
+        <div key={k} className={`turn ${speakerClass(t.speaker)} ${focus && t.speaker !== focus ? 'dim' : ''}`}>
+          <span className="spk" title={clock(t.items[0][0].s)}>{t.speaker || '—'}</span>
+          <p className="memo-words">{t.items.map(seg)}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+interface PartSum { title: string; summary: string; points: string[] }
+
+/** The part picked on the waveform: how long, who talked how much, what was
+ *  said there, and on request what it comes down to (the AI gets only these words). */
+function PartPanel({ memo: m, range, time, focus, onClear, onPlay, onSeek }: { memo: Memo; range: Range; time: number; focus: Who; onClear: () => void; onPlay: () => void; onSeek: (ms: number) => void }) {
+  const { toast } = useToast()
+  const items = useMemo(() => inRange(m.segments, range), [m.segments, range])
+  const spans = useMemo(() => speakerSpans(m.segments), [m.segments])
+  const key = partParam(range)
+  const [sum, setSum] = useState<{ key: string; data?: PartSum; busy?: boolean; err?: string } | null>(null)
+  const here = sum?.key === key ? sum : null
+  const meeting = hasSpeakers(m.segments)
+  const talk = SPEAKERS.map(w => ({ w, ms: within(spans[w], range.from, range.to) }))
+  const talkAll = talk.reduce((a, x) => a + x.ms, 0) || 1
+  const playing = time >= range.from && time < range.to
+
+  const sumUp = async () => {
+    setSum({ key, busy: true })
+    try { setSum({ key, data: await api.post<PartSum>(`${V1}/memos/${m.id}/part`, range) }) }
+    catch (e) { setSum({ key, err: (e as Error).message }) }
+  }
+  const words = () => partText(items.map(([s]) => s))
+  const menu = (): MenuItem[] => [
+    { label: 'Copy the words', icon: 'copy', disabled: !items.length, onSelect: async () => toast(await copyText(words()) ? 'Copied' : 'Could not copy', 'ok') },
+    { label: 'Copy a link to this part', icon: 'link', onSelect: async () => toast(await copyText(window.location.href.split('?')[0] + '?part=' + key) ? 'Link copied' : 'Could not copy', 'ok') },
+    ...(here?.data ? [{ label: 'Copy the summary', icon: 'sparkles', onSelect: async () => { const d = here.data!; toast(await copyText([d.title, d.summary, ...d.points.map(p => '- ' + p)].filter(Boolean).join('\n\n')) ? 'Copied' : 'Could not copy', 'ok') } } as MenuItem] : []),
+  ]
+  return (
+    <section className="card part-card">
+      <div className="card-head part-head">
+        <span className="part-ico"><Icon name="scissors" size={16} /></span>
+        <div className="grow part-when">
+          <h3 className="tnum">{clock(range.from)} – {clock(range.to)}</h3>
+          <span className="muted small">{length(range.to - range.from)} · {items.length ? `${items.length} ${items.length === 1 ? 'sentence' : 'sentences'}` : 'quiet'}</span>
+        </div>
+        <button type="button" className="btn sm" onClick={onPlay}><Icon name={playing ? 'refresh' : 'play'} size={14} />{playing ? 'Again' : 'Play part'}</button>
+        <button type="button" className="btn sm" onClick={sumUp} disabled={!items.length || here?.busy}><Icon name="sparkles" size={14} />{here?.data ? 'Again' : 'Sum it up'}</button>
+        <MenuButton label="More" align="right" width={230} items={menu}><Icon name="more" size={18} /></MenuButton>
+        <button type="button" className="btn ghost icon-only sm" onClick={onClear} aria-label="Let go of the part" title="Let go (Esc)"><Icon name="x" size={16} /></button>
+      </div>
+      {meeting && <div className="part-talk">
+        <div className="talk-bar" aria-hidden="true">{talk.map(x => x.ms > 0 && <span key={x.w} className={x.w.toLowerCase()} style={{ flexGrow: x.ms }} />)}</div>
+        <div className="row wrap small">{talk.map(x => <span key={x.w} className={`talk-key ${x.w.toLowerCase()}`}><i />{x.w} <b className="tnum">{Math.round(x.ms / talkAll * 100)}%</b> <span className="muted tnum">{clock(x.ms)}</span></span>)}</div>
+      </div>}
+      {here && <div className="part-sum">
+        {here.busy && <p className="muted row" style={{ gap: 8 }}><Icon name="sparkles" size={14} />Reading this part…</p>}
+        {here.err && <p className="bad small">{here.err}</p>}
+        {here.data && <>
+          {here.data.title && <h4>{here.data.title}</h4>}
+          {here.data.summary && <p>{here.data.summary}</p>}
+          {here.data.points.length > 0 && <ul>{here.data.points.map((p, i) => <li key={i}>{p}</li>)}</ul>}
+        </>}
+      </div>}
+      <div className="card-body part-words">
+        {items.length ? <Said segs={m.segments} items={items} time={time} focus={focus} onSeek={onSeek} /> : <p className="muted">Nothing was said in this part.</p>}
+      </div>
+    </section>
   )
 }
 

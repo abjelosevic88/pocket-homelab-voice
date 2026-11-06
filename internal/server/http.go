@@ -67,6 +67,7 @@ func (s *Server) Router() http.Handler {
 				r.Delete("/memos/{id}", s.handleDeleteMemo)
 				r.Post("/memos/{id}/retry", s.handleRetry)
 				r.Post("/memos/{id}/tidy", s.handleTidy)
+				r.Post("/memos/{id}/part", s.handlePart)
 				r.Post("/polish", s.handlePolish)
 				r.Post("/memos/{id}/send", s.handleSend)
 				r.Post("/memos/{id}/actions/{i}", s.handleSkipAction)
