@@ -508,9 +508,19 @@ func (s *Server) findVoicesNow(ctx context.Context, uid, id int64) error {
 	return nil
 }
 
-// oldTidy: the AI's tidy-up was written before the voices were told apart.
+// oldTidy: the AI's tidy-up was written before the voices were told apart
+// (turn after turn says "Others:"; a new one may still sum up small talk so).
 func oldTidy(m *store.Memo) bool {
-	return len(m.Speakers) > 0 && (strings.HasPrefix(m.Tidy, speakerOthers+":") || strings.Contains(m.Tidy, "\n"+speakerOthers+":"))
+	if len(m.Speakers) == 0 {
+		return false
+	}
+	n := 0
+	for _, l := range strings.Split(m.Tidy, "\n") {
+		if strings.HasPrefix(l, speakerOthers+":") {
+			n++
+		}
+	}
+	return n >= 3
 }
 
 // retidyIfOld writes a meeting's tidy-up again with its voices (when the
