@@ -774,7 +774,7 @@ func (s *Server) handleSpeech(w http.ResponseWriter, r *http.Request) {
 		why = "the speech model (" + cur.Name + ", about " + strconv.FormatInt(cur.Bytes>>20, 10) + " MB) is downloaded with the first memo"
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"engine": firstNonEmpty(st.Engine, "local"), "ready": ready, "detail": why,
-		"whisper": s.speech.HasWhisper(), "ffmpeg": s.speech.HasFFmpeg(), "model": cur.ID, "dictation_model": dict.ID, "models": models, "threads": firstPositive(s.cfg.WhisperThreads, speech.DefaultThreads()),
+		"whisper": s.speech.HasWhisper(), "ffmpeg": s.speech.HasFFmpeg(), "model": cur.ID, "dictation_model": dict.ID, "models": models, "threads": firstPositive(s.cfg.WhisperThreads, speech.DefaultThreads()), "back_threads": firstPositive(s.cfg.BackThreads, speech.DefaultBackThreads()),
 		"languages": speech.Languages, "api_model": firstNonEmpty(st.SpeechAPI, speech.DefaultRemoteModel), "demo": s.cfg.DemoData})
 }
 

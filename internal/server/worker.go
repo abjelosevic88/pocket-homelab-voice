@@ -133,7 +133,7 @@ func (s *Server) process(ctx context.Context, m *store.Memo) {
 	defer s.clearProgress(m.ID)
 	s.setProgress(m.ID, "preparing", -1)
 	st, _ := s.store.GetSettings(ctx, m.UserID)
-	res, err := s.writeOut(ctx, m, st)
+	res, err := s.writeOut(speech.Background(ctx), m, st)
 	if ctx.Err() != nil {
 		return // shutting down: ResetWorking queues it again on start
 	}

@@ -50,7 +50,7 @@ export interface MemoPage { items: Memo[]; total: number; counts: Counts }
 
 export interface SpeechModel { id: string; name: string; engine: 'whisper' | 'parakeet'; file: string; bytes: number; note: string; ready: boolean; current: boolean; dictation: boolean; runs: boolean; download?: { got: number; total: number; error: string; done: boolean } }
 export interface Speech {
-  engine: 'local' | 'api'; ready: boolean; detail: string; whisper: boolean; ffmpeg: boolean; model: string; dictation_model: string; models: SpeechModel[]; threads: number
+  engine: 'local' | 'api'; ready: boolean; detail: string; whisper: boolean; ffmpeg: boolean; model: string; dictation_model: string; models: SpeechModel[]; threads: number; back_threads: number
   languages: { code: string; name: string }[]; api_model: string; demo: boolean
 }
 
