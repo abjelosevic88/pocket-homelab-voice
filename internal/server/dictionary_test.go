@@ -237,7 +237,18 @@ func meetingTools(t *testing.T, left, right bool) func(*config.Config) {
 	}
 	ff := filepath.Join(dir, "ffmpeg")
 	_ = os.WriteFile(ff, []byte("#!/bin/sh\nfor a; do last=$a; done\ncp "+wav+" \"$last\"\n"), 0o755)
-	return func(c *config.Config) { base(c); c.FFmpegBin = ff }
+	// each channel says its own words, so neither is taken for the other's echo
+	for name, said := range map[string][2]string{"you": {"Shall we ship on Friday?", "Then I write the notes."}, "others": {"Yes, Friday works.", "Good, we agree."}} {
+		js, _ := json.Marshal(map[string]any{"result": map[string]any{"language": "en"}, "transcription": []any{
+			map[string]any{"offsets": map[string]any{"from": 0, "to": 900}, "text": " " + said[0]},
+			map[string]any{"offsets": map[string]any{"from": 1000, "to": 2000}, "text": " " + said[1]},
+		}})
+		_ = os.WriteFile(filepath.Join(dir, name+".json"), js, 0o644)
+	}
+	wh := filepath.Join(dir, "whisper-cli")
+	_ = os.WriteFile(wh, []byte("#!/bin/sh\nwhile [ $# -gt 0 ]; do case $1 in -of) of=$2;; -f) f=$2;; esac; shift; done\n"+
+		"case $f in *-others*) src=others;; *) src=you;; esac\ncp "+dir+"/$src.json \"$of.json\"\n"), 0o755)
+	return func(c *config.Config) { base(c); c.FFmpegBin, c.WhisperBin = ff, wh }
 }
 
 func TestMeetingIsWrittenOutPerSpeaker(t *testing.T) {

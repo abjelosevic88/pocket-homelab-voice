@@ -14,6 +14,7 @@ Everything the UI does goes through `/api/v1`, JSON in and out. Sign in with the
 | `GET /memos/{id}/audio` | The recording (range requests work); `?download=1` to save it |
 | `POST /memos/{id}/retry {language}` | Write it out again |
 | `POST /memos/{id}/tidy` | Tidy it up with AI now |
+| `POST /memos/{id}/part` | `{from,to}` in ms: sum up that part with AI (only its words go to the AI; nothing is saved) → `{title,summary,points}` |
 | `POST /memos/{id}/actions/{i} {skipped}` | Skip a suggestion, or bring it back |
 | `POST /memos/{id}/send` | `{to: note\|daily\|task\|event\|expense, action, title, text, folder, due, notes, list_id, start, end, location, calendar_id, amount, currency, date, account_id}` → `{sent, memo}`; `action` marks that suggestion as sent |
 
