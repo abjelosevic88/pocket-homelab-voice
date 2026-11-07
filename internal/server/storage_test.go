@@ -125,7 +125,8 @@ func TestRecordingsMoveToTheChosenPlace(t *testing.T) {
 	a.ok(a.alice, "PUT", "/api/v1/storage", map[string]any{"kind": "folder", "path": filepath.Join(nas, "Alice")})
 	a.waitMoved("Server folder")
 	there := findFiles(t, filepath.Join(nas, "Alice"))
-	if len(there) != 1 || !strings.Contains(filepath.ToSlash(there[0]), "/2026/11/2026-11-06 12.00 ") || !strings.HasSuffix(there[0], " ("+memo+").m4a") {
+	rec, _ := time.Parse(time.RFC3339, "2026-11-06T12:00:00+01:00")
+	if len(there) != 1 || !strings.Contains(filepath.ToSlash(there[0]), rec.Local().Format("/2006/01/2006-01-02 15.04 ")) || !strings.HasSuffix(there[0], " ("+memo+").m4a") {
 		t.Fatalf("on the NAS: %v", there)
 	}
 	if left := findFiles(t, a.s.cfg.AudioDir); len(left) != 0 {
