@@ -131,6 +131,8 @@ a.list-row:hover { background: var(--surface-2); }
 .welcome-body { display: flex; gap: 18px; align-items: flex-start; }
 .welcome-body h2 { margin: 0 0 6px; font-size: 20px; }
 .col { display: flex; flex-direction: column; min-width: 0; }
+/* one column no wider than the page: a row of scrolling chips must not widen it */
+.stack { grid-template-columns: minmax(0, 1fr); }
 .stack.loose { gap: 18px; }
 .stack.tight { gap: 4px; }
 .block-line { display: block; }
