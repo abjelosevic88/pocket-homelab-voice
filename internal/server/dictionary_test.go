@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"math"
 	"mime/multipart"
 	"net/http"
@@ -301,5 +302,43 @@ func TestMeetingIsWrittenOutPerSpeaker(t *testing.T) {
 	}
 	if done3["meeting"] != false {
 		t.Fatalf("meeting: %v", done3["meeting"])
+	}
+}
+
+// POST /transcribe with a model for one dictation; without one the dictation model (Parakeet).
+func TestTranscribeModel(t *testing.T) {
+	a := newApp(t, fakeTools(t, "Hello there.|Bye.", "en"))
+	send := func(model string) (int, map[string]any) {
+		var body bytes.Buffer
+		mw := multipart.NewWriter(&body)
+		if model != "" {
+			_ = mw.WriteField("model", model)
+		}
+		fw, _ := mw.CreateFormFile("file", "clip.m4a")
+		_, _ = fw.Write([]byte("m4a"))
+		_ = mw.Close()
+		req, _ := http.NewRequest("POST", a.url+"/api/v1/transcribe", &body)
+		req.Header.Set("Content-Type", mw.FormDataContentType())
+		req.Header.Set("Authorization", "Bearer "+a.alice)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var out map[string]any
+		_ = json.NewDecoder(res.Body).Decode(&out)
+		return res.StatusCode, out
+	}
+	if code, out := send(""); code != 200 || !strings.HasPrefix(fmt.Sprint(out["engine"]), "parakeet") {
+		t.Fatalf("default: %d %v", code, out)
+	}
+	if code, out := send("large-v3-turbo-q5_0"); code != 200 || !strings.HasPrefix(fmt.Sprint(out["engine"]), "whisper") {
+		t.Fatalf("whisper: %d %v", code, out)
+	}
+	if code, out := send("no-such-model"); code != 400 {
+		t.Fatalf("unknown model: %d %v", code, out)
+	}
+	if code, out := send("small"); code != 422 {
+		t.Fatalf("not downloaded: %d %v", code, out)
 	}
 }

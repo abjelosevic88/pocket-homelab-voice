@@ -92,7 +92,7 @@ Styles: `natural` (punctuation, capitals, fillers out — what polishing always 
 | `GET /day/{YYYY-MM-DD}` | `{memos: [{id, title, kind, time, duration_ms, summary, text, status, sent, url}], count, duration_ms}` — what Pocket Day writes into the journal |
 | `GET /search?q&limit` | `{items, total, dictations: {items, total}}`: the memos, and the dictations with these words |
 | `GET /tags`, `GET /kinds` | Tags with counts; kinds and how many of each |
-| `POST /transcribe` | multipart `file`, optional `language` → `{text, language, segments, engine}`. Written out with the person's engine, language and words; nothing is kept |
+| `POST /transcribe` | multipart `file`, optional `language` and `model` → `{text, language, segments, engine}`. Written out with the person's engine, language and words; nothing is kept. `model` is an id from `GET /speech` (`parakeet-tdt-0.6b-v3-q8_0`, `large-v3-turbo-q5_0`, …) for this one recording; without it, the dictation model (Parakeet unless an admin picked another). Unknown id: **400**; not downloaded here: **422** |
 | `GET /speech` | How memos are written out: engine, ready, the memo and dictation models and every model with its engine and download state |
 
 ## Links (Pocket Core)

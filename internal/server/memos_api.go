@@ -677,6 +677,21 @@ func (s *Server) handleTranscribe(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "language is a two-letter code like bs or en")
 		return
 	}
+	// an optional model for this one dictation (an id from GET /speech); without one, the
+	// dictation model an admin picked (Parakeet unless changed)
+	model := s.dictationModel(ctx)
+	if id := strings.TrimSpace(r.FormValue("model")); id != "" {
+		m, ok := speech.ModelByID(id)
+		if !ok {
+			writeErr(w, http.StatusBadRequest, "no speech model "+strconv.Quote(id)+"; GET /speech lists them")
+			return
+		}
+		if st.Engine != "api" && !s.speech.ModelReady(m) {
+			writeErr(w, http.StatusUnprocessableEntity, m.Name+" is not downloaded on this server; an admin can download it under Settings → Writing out")
+			return
+		}
+		model = m
+	}
 	in := filepath.Join(s.tmpDir(), "dictation-"+randName(ext))
 	defer os.Remove(in)
 	dst, err := os.Create(in)
@@ -691,7 +706,7 @@ func (s *Server) handleTranscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	words, rp := s.dictionary(ctx, uid)
-	res, err := s.transcribeFile(ctx, in, st, lang, words)
+	res, err := s.transcribeFile(ctx, in, st, lang, words, model)
 	if err != nil {
 		writeErr(w, http.StatusUnprocessableEntity, err.Error())
 		return
@@ -709,12 +724,11 @@ func (s *Server) handleTranscribe(w http.ResponseWriter, r *http.Request) {
 }
 
 // transcribeFile writes out one file now with the person's engine.
-func (s *Server) transcribeFile(ctx context.Context, path string, st store.Settings, lang string, words []store.Word) (*speech.Result, error) {
+func (s *Server) transcribeFile(ctx context.Context, path string, st store.Settings, lang string, words []store.Word, model speech.Model) (*speech.Result, error) {
 	prompt := speechPrompt(st.Vocabulary, words)
 	if st.Engine == "api" {
 		return speech.NewRemote(st.OpenAIBaseURL, st.OpenAIKey, st.SpeechAPI).Transcribe(ctx, path, lang, prompt)
 	}
-	model := s.dictationModel(ctx)
 	if !s.speech.HasEngine(model) {
 		return nil, noEngine(model)
 	}
