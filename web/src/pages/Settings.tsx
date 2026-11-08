@@ -174,7 +174,7 @@ function SpeechTab() {
           <Select ariaLabel="Model for memos" value={sp.model} disabled={!isAdmin} onChange={v => save({ speech_model: v }).then(reload)}
             options={sp.models.map(m => ({ value: m.id, label: `${m.name} · ${m.engine === 'parakeet' ? 'Parakeet' : 'Whisper'}`, disabled: !m.runs }))} />
         </SettingRow>
-        <SettingRow title="Dictation is written out with" help="What other apps send to be written out (nothing is kept).">
+        <SettingRow title="Dictation is written out with" help="What other apps send to be written out (the recording is not kept).">
           <Select ariaLabel="Model for dictation" value={sp.dictation_model} disabled={!isAdmin} onChange={v => save({ dictation_model: v }).then(reload)}
             options={sp.models.map(m => ({ value: m.id, label: `${m.name} · ${m.engine === 'parakeet' ? 'Parakeet' : 'Whisper'}`, disabled: !m.runs }))} />
         </SettingRow>
@@ -362,7 +362,7 @@ function Integrations() {
         <dl className="set-dl">
           <div><dt>voice:read</dt><dd className="muted">Your memos: their words, the tidy version and summary, what they are about, where you sent them and the recording.</dd></div>
           <div><dt>voice:write</dt><dd className="muted">Add a recording or a dictated text as a memo; that app may change or remove only the memos it added.</dd></div>
-          <div><dt>voice:transcribe</dt><dd className="muted">Send a short recording and get the words back, written out on this server with your language and words. Nothing is kept.</dd></div>
+          <div><dt>voice:transcribe</dt><dd className="muted">Send a short recording and get the words back, written out on this server with your language and words; the recording is not kept. It may also add the words to your dictation history (<code>POST /dictations</code>).</dd></div>
         </dl>
       </Section>
       <div className="row"><button type="button" className="btn primary" onClick={() => save()} disabled={busy}>Save changes</button></div>

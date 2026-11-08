@@ -11,8 +11,10 @@ import (
 )
 
 // Dictation history: Pocket Launcher posts every finished dictation here
-// (from a retrying outbox, so the client's ref makes a POST idempotent), and
-// the Dictation page lists them with what they add up to.
+// (from a retrying outbox, so the client's ref makes a POST idempotent), so
+// does Pocket AI for what is dictated in its composer (phone app and web, on
+// the link Pocket AI → Voice), and the Dictation page lists them with where
+// each was made and what they add up to.
 
 const (
 	maxDictationRef  = 64
@@ -41,6 +43,7 @@ func (s *Server) handleCreateDictation(w http.ResponseWriter, r *http.Request) {
 		Engine     string `json:"engine"`
 		Language   string `json:"language"`
 		Device     string `json:"device"`
+		Source     string `json:"source"`
 		Polished   bool   `json:"polished"`
 		DictatedAt string `json:"dictated_at"`
 	}
@@ -87,7 +90,7 @@ func (s *Server) handleCreateDictation(w http.ResponseWriter, r *http.Request) {
 	d := &store.Dictation{
 		Ref: ref, Text: text, Raw: clip(in.Raw, maxDictationText), App: clip(in.App, 200), AppID: clip(in.AppID, 255),
 		DurationMS: in.DurationMS, Engine: clip(in.Engine, 100), Language: clip(in.Language, 20), Device: clip(in.Device, 200),
-		Polished: in.Polished, DictatedAt: store.DictationTime(at),
+		Source: dictationSource(clip(in.Source, 100), linkApp(ctx)), Polished: in.Polished, DictatedAt: store.DictationTime(at),
 	}
 	created, err := s.store.CreateDictation(ctx, uid, d)
 	if err != nil {
@@ -101,10 +104,25 @@ func (s *Server) handleCreateDictation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, code, map[string]any{"dictation": d})
 }
 
+// dictationSource is where a dictation was made: what the client says, else
+// the app posting it on a link, else Pocket Launcher (the first client, which
+// sends no source).
+func dictationSource(claimed, app string) string {
+	switch {
+	case claimed != "":
+		return claimed
+	case app == "ai":
+		return "Pocket AI"
+	case app != "":
+		return "Pocket " + strings.ToUpper(app[:1]) + app[1:]
+	}
+	return "Pocket Launcher"
+}
+
 func (s *Server) handleListDictations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	q := r.URL.Query()
-	f := store.DictationFilter{Q: q.Get("q"), App: q.Get("app"), From: q.Get("from"), To: q.Get("to"), Limit: queryInt(r, "limit")}
+	f := store.DictationFilter{Q: q.Get("q"), App: q.Get("app"), Source: q.Get("source"), From: q.Get("from"), To: q.Get("to"), Limit: queryInt(r, "limit")}
 	f.Before, _ = strconv.ParseInt(q.Get("before"), 10, 64)
 	if f.Limit <= 0 {
 		f.Limit = 50

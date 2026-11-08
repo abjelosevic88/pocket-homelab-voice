@@ -24,6 +24,7 @@ type Dictation struct {
 	Engine     string `json:"engine"`
 	Language   string `json:"language"`
 	Device     string `json:"device"`
+	Source     string `json:"source"` // the client that recorded it: Pocket Launcher, Pocket AI app, …
 	Polished   bool   `json:"polished"`
 	DictatedAt string `json:"dictated_at"`
 	CreatedAt  string `json:"created_at"`
@@ -53,13 +54,13 @@ func savedSeconds(words, durationMS int64) float64 {
 	return math.Max(0, float64(words*60)/TypingWPM-float64(durationMS)/1000)
 }
 
-const dictationCols = `id, user_id, ref, text, raw, app, app_id, duration_ms, words, engine, language, device, polished, dictated_at, created_at`
+const dictationCols = `id, user_id, ref, text, raw, app, app_id, duration_ms, words, engine, language, device, source, polished, dictated_at, created_at`
 
 func scanDictation(r scanner) (*Dictation, error) {
 	var d Dictation
 	var polished int
 	if err := r.Scan(&d.ID, &d.UserID, &d.Ref, &d.Text, &d.Raw, &d.App, &d.AppID, &d.DurationMS, &d.Words, &d.Engine, &d.Language, &d.Device,
-		&polished, &d.DictatedAt, &d.CreatedAt); err != nil {
+		&d.Source, &polished, &d.DictatedAt, &d.CreatedAt); err != nil {
 		return nil, err
 	}
 	d.Polished = polished == 1
@@ -75,9 +76,9 @@ func (s *Store) CreateDictation(ctx context.Context, uid int64, d *Dictation) (c
 		d.DictatedAt = DictationTime(time.Now())
 	}
 	now := DictationTime(time.Now())
-	res, err := s.DB.ExecContext(ctx, `INSERT INTO dictations (user_id, ref, text, raw, app, app_id, duration_ms, words, engine, language, device, polished, search, dictated_at, created_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id, ref) DO NOTHING`,
-		uid, d.Ref, d.Text, d.Raw, d.App, d.AppID, d.DurationMS, d.Words, d.Engine, d.Language, d.Device, boolInt(d.Polished), speech.Fold(d.Text), d.DictatedAt, now)
+	res, err := s.DB.ExecContext(ctx, `INSERT INTO dictations (user_id, ref, text, raw, app, app_id, duration_ms, words, engine, language, device, source, polished, search, dictated_at, created_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id, ref) DO NOTHING`,
+		uid, d.Ref, d.Text, d.Raw, d.App, d.AppID, d.DurationMS, d.Words, d.Engine, d.Language, d.Device, d.Source, boolInt(d.Polished), speech.Fold(d.Text), d.DictatedAt, now)
 	if err != nil {
 		return false, err
 	}
@@ -125,6 +126,7 @@ func (s *Store) ClearDictations(ctx context.Context, uid int64) (int64, error) {
 type DictationFilter struct {
 	Q      string
 	App    string
+	Source string
 	From   string // local day YYYY-MM-DD
 	To     string
 	Before int64 // id cursor: the page after this dictation
@@ -146,6 +148,10 @@ func (s *Store) ListDictations(ctx context.Context, uid int64, f DictationFilter
 	if f.App != "" {
 		where = append(where, "app = ?")
 		args = append(args, f.App)
+	}
+	if f.Source != "" {
+		where = append(where, "source = ?")
+		args = append(args, f.Source)
 	}
 	if f.From != "" {
 		where = append(where, "dictated_at >= ?")
@@ -235,6 +241,7 @@ type DictationStats struct {
 	Week         DictationPeriod `json:"week"`
 	Streak       int             `json:"streak"`
 	Apps         []DictationApp  `json:"apps"`
+	Sources      []DictationApp  `json:"sources"` // the same by where it was dictated (App is the source's name)
 	Days         []DictationDay  `json:"days"`
 }
 
@@ -247,7 +254,7 @@ func (s *Store) DictationStatsFor(ctx context.Context, uid int64, now time.Time)
 	today := now.Format("2006-01-02")
 	weekFrom := AddDays(today, -6)
 	chartFrom := AddDays(today, -(StatsDays - 1))
-	st := &DictationStats{Apps: []DictationApp{}, Days: []DictationDay{}}
+	st := &DictationStats{Apps: []DictationApp{}, Sources: []DictationApp{}, Days: []DictationDay{}}
 	var saved, todaySaved, weekSaved float64
 	byDay := map[string]*DictationDay{}
 	rows, err := s.DB.QueryContext(ctx, `SELECT dictated_at, words, duration_ms FROM dictations WHERE user_id = ?`, uid)
@@ -328,7 +335,22 @@ func (s *Store) DictationStatsFor(ctx context.Context, uid int64, now time.Time)
 		}
 		st.Apps = append(st.Apps, a)
 	}
-	return st, arows.Err()
+	if err := arows.Err(); err != nil {
+		return nil, err
+	}
+	srows, err := s.DB.QueryContext(ctx, `SELECT source, COUNT(1) AS n, COALESCE(SUM(words),0) FROM dictations WHERE user_id = ? AND source <> '' GROUP BY source ORDER BY n DESC, source LIMIT 8`, uid)
+	if err != nil {
+		return nil, err
+	}
+	defer srows.Close()
+	for srows.Next() {
+		var a DictationApp
+		if err := srows.Scan(&a.App, &a.Sessions, &a.Words); err != nil {
+			return nil, err
+		}
+		st.Sources = append(st.Sources, a)
+	}
+	return st, srows.Err()
 }
 
 // DictationWordsOn is how many words uid dictated on a local day.

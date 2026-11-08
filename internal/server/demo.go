@@ -284,7 +284,10 @@ func (s *Server) seedDemoDictations(ctx context.Context, uid int64, rng *rand.Ra
 			}
 			words := len(strings.Fields(x.text))
 			d := &store.Dictation{Ref: fmt.Sprintf("demo-%d", n), Text: x.text, App: x.app, AppID: x.appID, DurationMS: int64(float64(words)/2.5*1000) + int64(rng.Intn(1500)),
-				Engine: "parakeet-v3", Language: "en", Device: "Maya’s MacBook Pro", DictatedAt: store.DictationTime(at)}
+				Engine: "parakeet-v3", Language: "en", Device: "Maya’s MacBook Pro", Source: "Pocket Launcher", DictatedAt: store.DictationTime(at)}
+			if rng.Intn(4) == 0 { // said into the Pocket AI app on the phone
+				d.App, d.AppID, d.Device, d.Source = "Pocket AI", "", "iPhone", "Pocket AI app"
+			}
 			if rng.Intn(3) == 0 {
 				d.Polished, d.Raw = true, "um so "+strings.ToLower(strings.TrimSuffix(x.text, "."))
 			}

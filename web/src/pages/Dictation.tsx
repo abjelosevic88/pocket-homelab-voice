@@ -9,7 +9,7 @@ import { clock, localDay, minutes } from '../lib/voice'
 import { useCrumb } from '../components/Layout'
 import { Icon } from '../components/icons'
 import { Confirm, ContextMenu, Empty, Loading, copyText, errMsg, useContextMenu, useDebounce, useToast } from '../components/ui'
-import { deleteDictation, dictationMenu } from '../lib/dictation'
+import { deleteDictation, dictationFrom, dictationFromIcon, dictationMenu } from '../lib/dictation'
 import { dayLabel } from './Memos'
 
 const PAGE = 50
@@ -44,6 +44,7 @@ export default function Dictation() {
   const [sp, setSp] = useSearchParams()
   const q = sp.get('q') || ''
   const app = sp.get('app') || ''
+  const source = sp.get('source') || ''
   const [typed, setTyped] = useState(q)
   const dq = useDebounce(typed, 250)
   const setParam = useCallback((k: string, v: string) => setSp(p => { const n = new URLSearchParams(p); if (v) n.set(k, v); else n.delete(k); return n }, { replace: true }), [setSp])
@@ -63,9 +64,10 @@ export default function Dictation() {
     const p = new URLSearchParams({ limit: String(PAGE) })
     if (q) p.set('q', q)
     if (app) p.set('app', app)
+    if (source) p.set('source', source)
     if (before) p.set('before', String(before))
     return api.get<DictationPage>(`${V1}/dictations?${p}`)
-  }, [q, app])
+  }, [q, app, source])
 
   const loadStats = useCallback(() => api.get<DictationStats>(`${V1}/dictations/stats`).then(setStats).catch(() => {}), [])
   const load = useCallback(() => {
@@ -143,17 +145,19 @@ export default function Dictation() {
     } catch (e) { toast(errMsg(e), 'err') }
   }
 
-  const filtered = !!(q || app)
+  const filtered = !!(q || app || source)
   const nothingYet = stats && stats.sessions === 0
   const apps = stats?.apps.map(a => a.app) || []
   if (app && !apps.includes(app)) apps.push(app)
+  const sources = stats?.sources?.map(a => a.app) || []
+  if (source && !sources.includes(source)) sources.push(source)
 
   return (
     <div className="stack loose dict-page">
       <div className="page-head">
         <div className="grow">
           <h1 className="page-title">Dictation</h1>
-          <p className="muted small">What you dictated on your Mac with Pocket Launcher, the app each one went into, and the time it saved you.</p>
+          <p className="muted small">What you dictated with Pocket Launcher on your Mac and in the Pocket AI app or web page, where each one was made, the app it went into, and the time it saved you.</p>
         </div>
       </div>
 
@@ -161,7 +165,7 @@ export default function Dictation() {
 
       {nothingYet && !filtered ? (
         <div className="card"><Empty icon="dictation" title="No dictations yet">
-          <p className="dict-empty">Hold the dictation key in Pocket Launcher on your Mac and talk: the words are typed into whatever text box has focus. Each dictation then appears here with the app it went into, how long you spoke and the time it saved you over typing.</p>
+          <p className="dict-empty">Hold the dictation key in Pocket Launcher on your Mac and talk: the words are typed into whatever text box has focus. Or tap the mic in Pocket AI, on the phone or the web page. Each dictation then appears here with where you made it, the app it went into, how long you spoke and the time it saved you over typing.</p>
         </Empty></div>
       ) : <>
         <div className="row wrap filters">
@@ -170,11 +174,15 @@ export default function Dictation() {
             <button type="button" className={`chip ${!app ? 'active' : ''}`} aria-pressed={!app} onClick={() => setParam('app', '')}>All</button>
             {apps.map(a => <button key={a} type="button" className={`chip ${app === a ? 'active' : ''}`} aria-pressed={app === a} onClick={() => setParam('app', app === a ? '' : a)}>{a}</button>)}
           </div>}
+          {sources.length > 1 && <div className="chips scroll" role="group" aria-label="Filter by where it was dictated">
+            <button type="button" className={`chip ${!source ? 'active' : ''}`} aria-pressed={!source} onClick={() => setParam('source', '')}>Anywhere</button>
+            {sources.map(a => <button key={a} type="button" className={`chip ${source === a ? 'active' : ''}`} aria-pressed={source === a} onClick={() => setParam('source', source === a ? '' : a)}>{a}</button>)}
+          </div>}
         </div>
 
         {err && <div className="callout danger"><Icon name="alert" size={15} /><span>{err}</span></div>}
         {!items && !err && <Loading />}
-        {items && items.length === 0 && <Empty icon="search" title="Nothing found">{q ? 'No dictation has these words.' : 'Nothing was dictated into this app.'}</Empty>}
+        {items && items.length === 0 && <Empty icon="search" title="Nothing found">{q ? 'No dictation has these words.' : app ? 'Nothing was dictated into this app.' : 'Nothing was dictated there.'}</Empty>}
 
         {groups.map(g => (
           <section key={g.day} className="card flush">
@@ -241,6 +249,8 @@ function DictationRow({ d, onDelete, onCopy }: { d: DictationT; onDelete: () => 
         <p className="dict-text">{d.text}</p>
         <div className="dict-meta">
           <time dateTime={d.dictated_at} title={fmtDateTime(d.dictated_at)}>{agoShort(d.dictated_at)}</time>
+          <span className="dict-sep">·</span>
+          <span className="inline-ico dict-from" title={`Dictated with ${dictationFrom(d)}`}><Icon name={dictationFromIcon(d)} size={12} />{dictationFrom(d)}</span>
           <span className="dict-sep">·</span>
           <span className="inline-ico" title={`Spoke for ${clock(d.duration_ms)}${d.engine ? ` · ${d.engine}` : ''}`}><Icon name="mic" size={12} />{clock(d.duration_ms)}</span>
           {d.app && <><span className="dict-sep">·</span><span className="dict-app" title={d.app_id || undefined}>→ {d.app}</span></>}

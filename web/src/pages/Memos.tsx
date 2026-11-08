@@ -11,7 +11,7 @@ import { useCrumb, openCreate } from '../components/Layout'
 import { Icon } from '../components/icons'
 import { Confirm, ContextMenu, Empty, Loading, copyText, useContextMenu, useDebounce, useIsMobile, useToast, type MenuItem } from '../components/ui'
 import { SendModal, TARGETS, useCanSend, type Target } from '../components/Send'
-import { deleteDictation, dictationMenu } from '../lib/dictation'
+import { deleteDictation, dictationFrom, dictationMenu } from '../lib/dictation'
 
 export type View = 'inbox' | 'all' | 'starred' | 'kind' | 'tag'
 
@@ -135,7 +135,7 @@ export default function Memos({ view }: { view: View }) {
       {err && <div className="callout danger"><Icon name="alert" size={15} /><span>{err}</span></div>}
       {!ready && !err && <Loading />}
       {ready && page && shown === 0 && (q ? <Empty icon="search" title="Nothing found">{withDicts ? 'No memo or dictation has these words.' : 'No memo has these words.'}</Empty>
-        : onlyDicts ? <Empty icon="dictation" title="No dictations yet">What you dictate on your Mac with Pocket Launcher shows up here.</Empty>
+        : onlyDicts ? <Empty icon="dictation" title="No dictations yet">What you dictate with Pocket Launcher on your Mac or in Pocket AI shows up here.</Empty>
         : view === 'inbox' ? <InboxEmpty all={page.counts.all} /> : <Empty icon="mic" title="No memos here" />)}
       {ready && groups.map(g => (
         <section key={g.day} className="card flush">
@@ -164,7 +164,7 @@ function DictationRow({ d, onDeleted, onRestored }: { d: Dictation; onDeleted: (
       <span className="list-ico dict-ico"><Icon name="dictation" size={16} /></span>
       <span className="grow row-main">
         <span className="dict-mtitle">{d.text}</span>
-        <span className="dict-msub muted small">Dictation{d.app && <> → {d.app}</>} · <span className="tnum">{clock(d.duration_ms)}</span>{d.polished && <span className="pill accent">polished</span>}</span>
+        <span className="dict-msub muted small">Dictation{d.app && <> → {d.app}</>} · {dictationFrom(d)} · <span className="tnum">{clock(d.duration_ms)}</span>{d.polished && <span className="pill accent">polished</span>}</span>
       </span>
       <span className="row-side"><span className="muted small tnum">{fmtISOTime(d.dictated_at)}</span></span>
     </a>

@@ -472,6 +472,7 @@ a.list-row:hover, .list-row:has(> a.row-main:hover) { background: var(--hover); 
 .dict-meta .inline-ico { gap: 4px; }
 .dict-sep { color: var(--faint); }
 .dict-app { color: var(--text-2); }
+.dict-from { color: var(--text-2); }
 .dict-polished { position: relative; font-family: var(--font); cursor: default; }
 .dict-tip { position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 30; width: max-content; max-width: min(420px, 80vw); padding: 8px 10px; border-radius: 8px;
   background: var(--raised); color: var(--text); box-shadow: var(--shadow-lg); font-size: 12.5px; font-weight: 400; line-height: 1.45; white-space: pre-wrap; text-align: left;

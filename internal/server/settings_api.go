@@ -558,6 +558,9 @@ func (s *Server) importPocket(ctx context.Context, uid int64, doc exportDoc) map
 		} else {
 			d.DictatedAt = ""
 		}
+		if d.Source == "" { // an export from before sources: all from Pocket Launcher
+			d.Source = "Pocket Launcher"
+		}
 		if created, err := s.store.CreateDictation(ctx, uid, &d); err == nil && created {
 			counts["dictations"]++
 		}

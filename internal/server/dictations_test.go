@@ -31,7 +31,7 @@ func TestDictationIsIdempotent(t *testing.T) {
 		d["raw"] != "uh send the report to ana tomorrow" || num(d, "duration_ms") != 3200 || d["created_at"] == "" {
 		t.Fatalf("created: %v", first)
 	}
-	for _, k := range []string{"id", "ref", "text", "raw", "app", "app_id", "duration_ms", "words", "engine", "language", "device", "polished", "dictated_at", "created_at"} {
+	for _, k := range []string{"id", "ref", "text", "raw", "app", "app_id", "duration_ms", "words", "engine", "language", "device", "source", "polished", "dictated_at", "created_at"} {
 		if _, ok := d[k]; !ok {
 			t.Fatalf("dictation has no %q: %v", k, d)
 		}
@@ -270,6 +270,54 @@ func TestDictationLinkScope(t *testing.T) {
 	} {
 		if got := linkAllows(read, httptest.NewRequest(c.method, c.path, nil)); got != c.want {
 			t.Errorf("voice:read %s %s = %v", c.method, c.path, got)
+		}
+	}
+}
+
+func TestDictationLinkTranscribeMayAddHistory(t *testing.T) {
+	tr := []string{"voice:transcribe"}
+	for _, c := range []struct {
+		method, path string
+		want         bool
+	}{
+		{"POST", "/api/v1/dictations", true}, // Pocket AI adds what was dictated in its composer
+		{"GET", "/api/v1/dictations", false},
+		{"DELETE", "/api/v1/dictations", false},
+		{"DELETE", "/api/v1/dictations/3", false},
+	} {
+		if got := linkAllows(tr, httptest.NewRequest(c.method, c.path, nil)); got != c.want {
+			t.Errorf("voice:transcribe %s %s = %v", c.method, c.path, got)
+		}
+	}
+}
+
+func TestDictationSource(t *testing.T) {
+	a := newApp(t, nil)
+	// Pocket Launcher sends no source
+	mac := a.expect(http.StatusCreated, a.alice, "POST", "/api/v1/dictations", dict("src-mac", "from the mac", "Slack", 1000, time.Now().Add(-2*time.Minute)))
+	if d := num2(mac, "dictation"); d["source"] != "Pocket Launcher" {
+		t.Fatalf("no source: %v", d)
+	}
+	phone := dict("src-phone", "from the phone", "Pocket AI", 1500, time.Now().Add(-time.Minute))
+	phone["source"], phone["device"], phone["app_id"] = "Pocket AI app", "iPhone", ""
+	if d := num2(a.expect(http.StatusCreated, a.alice, "POST", "/api/v1/dictations", phone), "dictation"); d["source"] != "Pocket AI app" || d["device"] != "iPhone" {
+		t.Fatalf("phone: %v", d)
+	}
+	l := a.ok(a.alice, "GET", "/api/v1/dictations?source="+strings.ReplaceAll("Pocket AI app", " ", "%20"), nil)
+	items, _ := l["items"].([]any)
+	if num(l, "total") != 1 || len(items) != 1 || items[0].(map[string]any)["text"] != "from the phone" {
+		t.Fatalf("filtered by source: %v", l)
+	}
+	st := a.ok(a.alice, "GET", "/api/v1/dictations/stats", nil)
+	srcs, _ := st["sources"].([]any)
+	if len(srcs) != 2 {
+		t.Fatalf("stats sources: %v", st["sources"])
+	}
+	for _, c := range []struct{ claimed, app, want string }{
+		{"", "", "Pocket Launcher"}, {"", "ai", "Pocket AI"}, {"", "day", "Pocket Day"}, {"Pocket AI on the web", "ai", "Pocket AI on the web"},
+	} {
+		if got := dictationSource(c.claimed, c.app); got != c.want {
+			t.Errorf("dictationSource(%q, %q) = %q, want %q", c.claimed, c.app, got, c.want)
 		}
 	}
 }
