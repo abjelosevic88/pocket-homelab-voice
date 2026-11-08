@@ -37,6 +37,9 @@ type Result struct {
 	Language string    `json:"language"`
 	Segments []Segment `json:"segments"`
 	Engine   string    `json:"engine"`
+	// DurationMS is how long the recording is (0 when unknown); a short clip
+	// may come back from Parakeet without timed segments.
+	DurationMS int64 `json:"duration_ms,omitempty"`
 }
 
 // Model is one speech model Voice can use: OpenAI's Whisper (about 99 languages) or NVIDIA's
@@ -358,6 +361,16 @@ func (l *Local) ToWAV(ctx context.Context, in, out string) error {
 }
 
 // ToWAVChannels decodes a recording into 16 kHz 16-bit WAV keeping its channels (meetings).
+// WAVDurationMS is the length of a WAV written by ToWAV (16 kHz, mono, 16-bit:
+// 32 bytes a millisecond after the 44-byte header); 0 when it can't be read.
+func WAVDurationMS(path string) int64 {
+	fi, err := os.Stat(path)
+	if err != nil || fi.Size() <= 44 {
+		return 0
+	}
+	return (fi.Size() - 44) / 32
+}
+
 func (l *Local) ToWAVChannels(ctx context.Context, in, out string) error {
 	return l.ffmpeg(ctx, "-i", in, "-vn", "-ar", "16000", "-c:a", "pcm_s16le", "-f", "wav", out)
 }

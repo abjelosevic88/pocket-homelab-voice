@@ -746,7 +746,11 @@ func (s *Server) transcribeFile(ctx context.Context, path string, st store.Setti
 	if err := s.speech.ToWAV(ctx, path, wav); err != nil {
 		return nil, err
 	}
-	return s.speech.Transcribe(ctx, wav, model, lang, prompt, nil)
+	res, err := s.speech.Transcribe(ctx, wav, model, lang, prompt, nil)
+	if res != nil {
+		res.DurationMS = speech.WAVDurationMS(wav)
+	}
+	return res, err
 }
 
 // handleSpeech says how this person's memos are written out: the engine, the
