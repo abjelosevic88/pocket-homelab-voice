@@ -797,7 +797,7 @@ func (s *Server) handleSpeech(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"engine": firstNonEmpty(st.Engine, "local"), "ready": ready, "detail": why,
 		"whisper": s.speech.HasWhisper(), "ffmpeg": s.speech.HasFFmpeg(), "model": cur.ID, "dictation_model": dict.ID, "models": models, "threads": firstPositive(s.cfg.WhisperThreads, speech.DefaultThreads()), "back_threads": firstPositive(s.cfg.BackThreads, speech.DefaultBackThreads()),
-		"languages": speech.Languages, "api_model": firstNonEmpty(st.SpeechAPI, speech.DefaultRemoteModel), "demo": s.cfg.DemoData})
+		"languages": speech.Languages, "drop_fillers": st.DropFillers, "latin": st.Latin, "api_model": firstNonEmpty(st.SpeechAPI, speech.DefaultRemoteModel), "demo": s.cfg.DemoData})
 }
 
 func firstPositive(v ...int) int {

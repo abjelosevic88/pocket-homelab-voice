@@ -4,7 +4,7 @@ import "testing"
 
 func TestDropFillers(t *testing.T) {
 	cases := map[string]string{
-		"Yeah, please do a bit more digging because Heidi needs to know uh more details.": "Yeah, please do a bit more digging because Heidi needs to know more details.",
+		"Yeah, please do a bit more digging because Heidi needs to know uh more details.":    "Yeah, please do a bit more digging because Heidi needs to know more details.",
 		"Okay, uh do your checks right now. Is this uh this should be VS production I think": "Okay, do your checks right now. Is this this should be VS production I think",
 		"Uh, so we go.":            "So we go.",
 		"Fine. Um, I think so.":    "Fine. I think so.",
@@ -18,6 +18,9 @@ func TestDropFillers(t *testing.T) {
 		"no fillers here":          "no fillers here",
 		"one uh\ntwo um three":     "one\ntwo three",
 		"umbrella and uhura":       "umbrella and uhura",
+		"Okay, mmm tell me this.":  "Okay, tell me this.",
+		"Uhhhh hmmmm ok":           "Ok",
+		"5 mm wide":                "5 mm wide",
 	}
 	for in, want := range cases {
 		if got := DropFillers(in); got != want {

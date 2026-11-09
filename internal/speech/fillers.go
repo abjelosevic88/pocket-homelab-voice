@@ -1,6 +1,7 @@
 package speech
 
 import (
+	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -11,14 +12,12 @@ import (
 // Parakeet writes down every "uh" and "um"; for dictation without the AI they
 // went straight into the text. These are sounds only, never words, so taking
 // them out needs no AI: "uh-huh", "mhm" (yes) and words like "ovaj" stay.
+// Pocket Launcher and the Pocket AI phone app do the same with the same pattern.
 
-var fillers = map[string]bool{
-	"uh": true, "uhh": true, "uhhh": true, "uhm": true, "uhmm": true,
-	"um": true, "umm": true, "ummm": true, "erm": true, "ehm": true, "ahm": true,
-	"hm": true, "hmm": true, "hmmm": true, "mmm": true, "eee": true, "eeh": true, "aaa": true,
-}
+var fillerRe = regexp.MustCompile(`(?i)^(?:u+h+m*|u+m+|h+m+|m{3,}|e{3,}h*|a{3,}|e+r+m+|e+h+m+|a+h+m+)$`)
 
-func isFiller(core string) bool { return fillers[strings.ToLower(core)] }
+// isFiller: uh, uhhh, um, uhm, hmm, mmm, eee, erm, ehm… ("mm" stays: millimetres).
+func isFiller(core string) bool { return fillerRe.MatchString(core) }
 
 // splitPunct parts a word into what is around it: `"(uh,` → `"(`, `uh`, `,`.
 func splitPunct(w string) (lead, core, trail string) {

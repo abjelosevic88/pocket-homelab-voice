@@ -213,10 +213,10 @@ type Settings struct {
 	Currency   string `json:"currency"`
 
 	// Writing out.
-	Engine      string `json:"engine"`     // local (on this server) | api (OpenAI or a speech server)
-	Language    string `json:"language"`   // "" = find out each time
-	Vocabulary  string `json:"vocabulary"` // names and words to expect
-	Latin       bool   `json:"latin"`      // Serbian Cyrillic in Latin letters
+	Engine      string `json:"engine"`       // local (on this server) | api (OpenAI or a speech server)
+	Language    string `json:"language"`     // "" = find out each time
+	Vocabulary  string `json:"vocabulary"`   // names and words to expect
+	Latin       bool   `json:"latin"`        // Serbian Cyrillic in Latin letters
 	DropFillers bool   `json:"drop_fillers"` // dictation: "uh", "um" and the like out
 	SpeechAPI   string `json:"speech_api_model"`
 	KeepAudio   int    `json:"keep_audio_days"` // 0 = forever

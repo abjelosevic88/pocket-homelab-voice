@@ -93,7 +93,7 @@ Styles: `natural` (punctuation, capitals, fillers out — what polishing always 
 | `GET /search?q&limit` | `{items, total, dictations: {items, total}}`: the memos, and the dictations with these words |
 | `GET /tags`, `GET /kinds` | Tags with counts; kinds and how many of each |
 | `POST /transcribe` | multipart `file`, optional `language` and `model` → `{text, language, segments, engine}`. Written out with the person's engine, language and words; nothing is kept. With the person's `drop_fillers` setting (on unless turned off) hesitation sounds ("uh", "um", "hmm", "eee"…) are taken out of `text` and `segments` without AI; "mhm", "uh-huh" and real words stay. `model` is an id from `GET /speech` (`parakeet-tdt-0.6b-v3-q8_0`, `large-v3-turbo-q5_0`, …) for this one recording; without it, the dictation model (Parakeet unless an admin picked another). Unknown id: **400**; not downloaded here: **422** |
-| `GET /speech` | How memos are written out: engine, ready, the memo and dictation models and every model with its engine and download state |
+| `GET /speech` | How memos are written out: engine, ready, the memo and dictation models and every model with its engine and download state; the person's `drop_fillers` and `latin`, so apps that write dictation out on their own device (Pocket Launcher, the Pocket AI phone app) do the same |
 
 ## Links (Pocket Core)
 
