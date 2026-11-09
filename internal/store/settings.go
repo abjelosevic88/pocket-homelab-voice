@@ -15,7 +15,7 @@ var boxKeys = map[string]bool{"title": true, "setup_complete": true, "speech_mod
 // defaults returns the settings a person starts with.
 func (s *Store) defaults() Settings {
 	return Settings{Title: DefaultTitle, DateFormat: "auto", TimeFormat: "auto", WeekStart: 1, Currency: "EUR",
-		Engine: "local", Latin: true, PlaybackSpd: "1", AITidy: true, FileOnSend: true, NotesFolder: "Voice", NotesListen: true,
+		Engine: "local", Latin: true, DropFillers: true, PlaybackSpd: "1", AITidy: true, FileOnSend: true, NotesFolder: "Voice", NotesListen: true,
 		NotifyDone: true, NotifyFailed: true, NotifyInbox: false, NotifyHour: s.NotifyHour, NotifyFormat: "apprise",
 		Conns: map[string]Conn{}, AIProvider: "auto"}
 }

@@ -717,6 +717,9 @@ func (s *Server) handleTranscribe(w http.ResponseWriter, r *http.Request) {
 			res.Segments[i].Text = speech.ToLatin(res.Segments[i].Text)
 		}
 	}
+	if st.DropFillers {
+		speech.DropFillersResult(res)
+	}
 	uses := map[int64]int{}
 	applyToResult(res, rp, uses)
 	s.store.CountWordUses(ctx, uid, uses)

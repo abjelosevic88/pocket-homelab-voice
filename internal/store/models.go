@@ -217,6 +217,7 @@ type Settings struct {
 	Language    string `json:"language"`   // "" = find out each time
 	Vocabulary  string `json:"vocabulary"` // names and words to expect
 	Latin       bool   `json:"latin"`      // Serbian Cyrillic in Latin letters
+	DropFillers bool   `json:"drop_fillers"` // dictation: "uh", "um" and the like out
 	SpeechAPI   string `json:"speech_api_model"`
 	KeepAudio   int    `json:"keep_audio_days"` // 0 = forever
 	PlaybackSpd string `json:"playback_speed"`  // 1 | 1.25 | 1.5 | 2

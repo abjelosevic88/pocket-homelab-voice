@@ -199,6 +199,7 @@ function SpeechTab() {
           <Select ariaLabel="Language" value={f.language} onChange={v => save({ language: v })} options={langs} placeholder="Find out by itself" clearLabel="Find out by itself" />
         </SettingRow>
         <SettingRow title="Serbian in Latin letters" help="Whisper writes Serbian in Cyrillic; this turns it into Latin letters (also for Bosnian and Croatian, when it slips)."><Switch checked={f.latin} onChange={v => save({ latin: v })} label="Latin letters" /></SettingRow>
+        <SettingRow title="Take out “uh” and “um”" help="Dictation leaves out sounds like uh, um, hmm and eee, also when no AI tidies it. Words like “mhm” and “ovaj” stay."><Switch checked={f.drop_fillers} onChange={v => save({ drop_fillers: v })} label="Take out uh and um" /></SettingRow>
         <SettingRow title="Names and words to expect" stack help={<>People, places, products and words you use, separated by commas. They help Whisper spell them right (Parakeet doesn't use them). The <Link to="/dictionary">Dictionary</Link> is the better place for them: there you can also say what to replace, and it works for dictation too.</>}>
           <textarea rows={3} value={f.vocabulary} onChange={e => setF({ ...f, vocabulary: e.target.value })} onBlur={() => save({ vocabulary: f.vocabulary })} placeholder="Amra, Mirza, Kibe Mahala, Jahorina, Pocket Core" />
         </SettingRow>

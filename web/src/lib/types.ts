@@ -11,7 +11,7 @@ export type Settings = ConnFields & {
   core_configured: boolean
   core_registered?: boolean
   title: string; date_format: string; time_format: string; week_start: number; currency: string
-  speech_model: string; dictation_model: string; engine: 'local' | 'api'; language: string; vocabulary: string; latin: boolean; speech_api_model: string
+  speech_model: string; dictation_model: string; engine: 'local' | 'api'; language: string; vocabulary: string; latin: boolean; drop_fillers: boolean; speech_api_model: string
   keep_audio_days: number; playback_speed: string
   ai_tidy: boolean; file_on_send: boolean
   notes_folder: string; notes_listen: boolean; tasks_list_id: number; calendar_id: number; money_account_id: number; money_category_id: number

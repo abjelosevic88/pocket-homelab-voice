@@ -39,7 +39,7 @@ func (s *Server) publicSettings(ctx context.Context, u *store.User, st store.Set
 	out := map[string]any{
 		"core_configured": s.core.Configured(), "core_registered": s.coreStatus()["registered"],
 		"title": st.Title, "date_format": st.DateFormat, "time_format": st.TimeFormat, "week_start": st.WeekStart, "currency": st.Currency,
-		"speech_model": s.speechModel(ctx).ID, "dictation_model": s.dictationModel(ctx).ID, "engine": firstNonEmpty(st.Engine, "local"), "language": st.Language, "vocabulary": st.Vocabulary, "latin": st.Latin,
+		"speech_model": s.speechModel(ctx).ID, "dictation_model": s.dictationModel(ctx).ID, "engine": firstNonEmpty(st.Engine, "local"), "language": st.Language, "vocabulary": st.Vocabulary, "latin": st.Latin, "drop_fillers": st.DropFillers,
 		"speech_api_model": st.SpeechAPI, "keep_audio_days": st.KeepAudio, "playback_speed": firstNonEmpty(st.PlaybackSpd, "1"),
 		"ai_tidy": st.AITidy, "file_on_send": st.FileOnSend,
 		"notes_folder": st.NotesFolder, "notes_listen": st.NotesListen, "tasks_list_id": st.TasksListID, "calendar_id": st.CalendarID,
@@ -198,6 +198,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	text("vocabulary", &cur.Vocabulary, in.Vocabulary)
 	boolIn("latin", &cur.Latin, in.Latin)
+	boolIn("drop_fillers", &cur.DropFillers, in.DropFillers)
 	text("speech_api_model", &cur.SpeechAPI, in.SpeechAPI)
 	boolIn("ai_tidy", &cur.AITidy, in.AITidy)
 	boolIn("file_on_send", &cur.FileOnSend, in.FileOnSend)
