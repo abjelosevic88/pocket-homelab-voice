@@ -436,6 +436,9 @@ func (l *Local) Transcribe(ctx context.Context, wav string, m Model, lang, promp
 	if p := strings.TrimSpace(prompt); p != "" {
 		args = append(args, "--prompt", p)
 	}
+	if vad := l.vadModel(); vad != "" {
+		args = append(args, "--vad", "-vm", vad)
+	}
 	cmd := command(ctx, bin, args...)
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
@@ -489,6 +492,7 @@ func (l *Local) Transcribe(ctx context.Context, wav string, m Model, lang, promp
 		}
 		res.Segments = append(res.Segments, Segment{Start: t.Offsets.From, End: t.Offsets.To, Text: txt})
 	}
+	res.Segments = DropLoops(res.Segments)
 	res.Text = JoinSegments(res.Segments)
 	return res, nil
 }

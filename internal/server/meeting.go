@@ -74,7 +74,15 @@ func (s *Server) writeOutMeeting(ctx context.Context, m *store.Memo, path, mono 
 		if err != nil {
 			return nil, err
 		}
-		for _, sg := range res.Segments {
+		// words over a silenced stretch, or one line looped: made up
+		segs := speech.DropLoops(res.Segments)
+		if sound, err := speech.Sounding(p.file); err == nil {
+			segs = speech.DropSilent(segs, sound)
+		}
+		if n := len(res.Segments) - len(segs); n > 0 {
+			s.log.Info("meeting: made-up lines dropped", "memo", m.ID, "speaker", p.speaker, "lines", n)
+		}
+		for _, sg := range segs {
 			sg.Speaker = p.speaker
 			all = append(all, sg)
 		}
