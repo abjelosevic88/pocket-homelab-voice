@@ -422,6 +422,7 @@ type exportDoc struct {
 	Version    string            `json:"version"`
 	Exported   string            `json:"exported_at"`
 	Memos      []store.Memo      `json:"memos"`
+	Folders    []store.Folder    `json:"folders"`
 	Sent       []store.Sent      `json:"sent"`
 	Dictations []store.Dictation `json:"dictations"`
 	Dictionary []store.Word      `json:"dictionary"`
@@ -432,6 +433,7 @@ type exportDoc struct {
 func (s *Server) export(ctx context.Context, uid int64) exportDoc {
 	doc := exportDoc{App: "pocket-voice", Version: Version, Exported: store.Now()}
 	doc.Memos, _, _ = s.store.ListMemos(ctx, uid, store.MemoFilter{Oldest: true, Full: true})
+	doc.Folders, _ = s.store.ListFolders(ctx, uid)
 	doc.Sent, _ = s.store.AllSent(ctx, uid)
 	doc.Dictations, _, _, _ = s.store.ListDictations(ctx, uid, store.DictationFilter{Oldest: true})
 	doc.Dictionary, _ = s.store.Words(ctx, uid)
@@ -509,9 +511,23 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) importPocket(ctx context.Context, uid int64, doc exportDoc) map[string]int {
-	counts := map[string]int{"memos": 0, "sent": 0, "dictations": 0, "dictionary": 0}
+	counts := map[string]int{"memos": 0, "folders": 0, "sent": 0, "dictations": 0, "dictionary": 0}
 	ids := map[int64]int64{}
+	// folders by name: one already here with that name is used
+	folders := map[int64]int64{}
+	for _, f := range doc.Folders {
+		if store.CleanFolderName(f.Name) == "" {
+			continue
+		}
+		if have, err := s.store.FolderByName(ctx, uid, f.Name); err == nil {
+			folders[f.ID] = have.ID
+		} else if made, err := s.store.CreateFolder(ctx, uid, f.Name); err == nil {
+			folders[f.ID] = made.ID
+			counts["folders"]++
+		}
+	}
 	for _, m := range doc.Memos {
+		m.FolderID = folders[m.FolderID]
 		old := m.ID
 		ref := fmt.Sprintf("pocket:%d", old)
 		if prev, err := s.store.MemoBySource(ctx, uid, "import", ref); err == nil {

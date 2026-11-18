@@ -1,12 +1,12 @@
-// The person's counts (inbox, starred, being written out), kinds and tags,
+// The person's counts (inbox, starred, being written out), kinds, tags and folders,
 // loaded once for the sidebar; any change in the app ("pvo:changed")
 // reloads them, and while a memo is being written out they refresh calmly.
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { api, V1 } from './api'
-import type { Counts, TagCount } from './types'
+import type { Counts, Folder, TagCount } from './types'
 
-interface Data { counts: Counts | null; kinds: Record<string, number>; tags: TagCount[]; reload: () => void }
-const Ctx = createContext<Data>({ counts: null, kinds: {}, tags: [], reload: () => {} })
+interface Data { counts: Counts | null; kinds: Record<string, number>; tags: TagCount[]; folders: Folder[]; reload: () => void }
+const Ctx = createContext<Data>({ counts: null, kinds: {}, tags: [], folders: [], reload: () => {} })
 export const useData = () => useContext(Ctx)
 
 /** Something was added or changed: lists and pages reload. */
@@ -25,10 +25,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [counts, setCounts] = useState<Counts | null>(null)
   const [kinds, setKinds] = useState<Record<string, number>>({})
   const [tags, setTags] = useState<TagCount[]>([])
+  const [folders, setFolders] = useState<Folder[]>([])
   const reload = useCallback(() => {
     api.get<{ counts: Counts }>(`${V1}/memos?limit=1`).then(r => setCounts(r.counts)).catch(() => {})
     api.get<{ counts: Record<string, number> }>(`${V1}/kinds`).then(r => setKinds(r.counts || {})).catch(() => {})
     api.get<TagCount[]>(`${V1}/tags`).then(setTags).catch(() => {})
+    api.get<Folder[]>(`${V1}/folders`).then(setFolders).catch(() => {})
   }, [])
   useEffect(() => { reload() }, [reload])
   useOnChange(reload)
@@ -38,5 +40,5 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const t = window.setInterval(() => { if (working.current > 0 && !document.hidden) reload() }, 4000)
     return () => window.clearInterval(t)
   }, [reload])
-  return <Ctx.Provider value={{ counts, kinds, tags, reload }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ counts, kinds, tags, folders, reload }}>{children}</Ctx.Provider>
 }

@@ -8,6 +8,7 @@ import { KINDS } from '../lib/voice'
 import { sendMemo } from './Recorder'
 import { Icon } from './icons'
 import { Field, Modal, Segmented, useToast } from './ui'
+import { folderHere } from '../lib/folders'
 
 /** "20240105 101500.m4a" (Apple Voice Memos) or the file's own date. */
 function recordedAt(f: File): string {
@@ -68,7 +69,7 @@ export function TypeModal({ onClose, onDone }: { onClose: () => void; onDone: (m
   const save = async (e: React.FormEvent) => {
     e.preventDefault()
     setBusy(true)
-    try { onDone(await api.post<Memo>(`${V1}/memos`, { text, kind })) } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
+    try { onDone(await api.post<Memo>(`${V1}/memos`, { text, kind, folder_id: folderHere() })) } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
   }
   return (
     <Modal title="Type a memo" onClose={onClose} size="sm">

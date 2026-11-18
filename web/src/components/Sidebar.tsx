@@ -1,19 +1,23 @@
 // Left column: record (and the add menu), the inbox with how many wait,
-// all and starred memos, what they are about, your tags — the Pocket
+// all and starred memos, your folders, what they are about, your tags — the Pocket
 // Calendar sidebar.
 import { useState } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/app-context'
 import { useData } from '../lib/data'
 import { KINDS } from '../lib/voice'
 import { Icon } from './icons'
 import { createItems, type CreateKind } from './Layout'
-import { type Anchor, Menu, rectOf } from './ui'
+import { DeleteFolder, FolderNameModal } from './Folders'
+import type { Folder } from '../lib/types'
+import { type Anchor, ContextMenu, Menu, rectOf, useContextMenu } from './ui'
 
 export function Sidebar({ onCreate, onNavigate }: { onCreate: (k: CreateKind) => void; onNavigate: () => void }) {
   const { status, settings } = useApp()
-  const { counts, kinds, tags } = useData()
+  const { counts, kinds, tags, folders } = useData()
   const [menu, setMenu] = useState<Anchor | null>(null)
+  const [making, setMaking] = useState(false)
+  const navigate = useNavigate()
   const title = settings?.title || status?.title || 'Pocket Voice'
   const nav: { to: string; label: string; icon: string; end?: boolean; count?: number; hint?: string }[] = [
     { to: '/', label: 'Inbox', icon: 'inbox', end: true, count: counts?.inbox, hint: 'Memos to deal with' },
@@ -50,6 +54,15 @@ export function Sidebar({ onCreate, onNavigate }: { onCreate: (k: CreateKind) =>
       </nav>
       <p className={`sb-working muted small ${counts && counts.working > 0 ? '' : 'idle'}`} aria-live="polite"><Icon name="waves" size={13} />{counts && counts.working > 1 ? `${counts.working} memos are being written out` : 'One memo is being written out'}</p>
 
+      <section className="sb-sec" aria-label="Folders">
+        <h4 className="sb-h">Folders<button type="button" className="btn ghost icon-only sm" onClick={() => setMaking(true)} aria-label="New folder" title="New folder"><Icon name="plus" size={14} /></button></h4>
+        {folders.map(f => <FolderLink key={f.id} folder={f} onNavigate={onNavigate} />)}
+        {!folders.length && <button type="button" className="sb-row sb-list sb-new" onClick={() => setMaking(true)}>
+          <span className="sb-list-ico" aria-hidden="true"><Icon name="folder-plus" size={14} /></span><span className="grow ellipsis muted">New folder</span>
+        </button>}
+      </section>
+      {making && <FolderNameModal onClose={() => setMaking(false)} onDone={f => { setMaking(false); onNavigate(); navigate(`/folder/${f.id}`) }} />}
+
       <section className="sb-sec">
         <h4 className="sb-h">About</h4>
         {KINDS.map(k => (
@@ -78,4 +91,26 @@ export function Sidebar({ onCreate, onNavigate }: { onCreate: (k: CreateKind) =>
       </div>
     </aside>
   )
+}
+
+/** A folder in the sidebar; right-click to rename or remove it. */
+function FolderLink({ folder: f, onNavigate }: { folder: Folder; onNavigate: () => void }) {
+  const ctx = useContextMenu()
+  const navigate = useNavigate()
+  const [edit, setEdit] = useState<'' | 'rename' | 'delete'>('')
+  return (<>
+    <NavLink to={`/folder/${f.id}`} onClick={onNavigate} onContextMenu={ctx.open} className={({ isActive }) => `sb-row sb-list ${isActive ? 'active' : ''}`}>
+      <span className="sb-list-ico" aria-hidden="true"><Icon name="folder" size={14} /></span>
+      <span className="grow ellipsis">{f.name}</span>
+      {!!f.count && <span className="muted small tnum" title={f.inbox ? `${f.count} memos, ${f.inbox} in the inbox` : `${f.count} memos`}>{f.count}</span>}
+    </NavLink>
+    {ctx.at && <ContextMenu at={ctx.at} onClose={ctx.close} items={[
+      { label: 'Open', icon: 'chevron-right', onSelect: () => navigate(`/folder/${f.id}`) },
+      { label: 'Rename…', icon: 'edit', onSelect: () => setEdit('rename') },
+      'sep',
+      { label: 'Remove folder', icon: 'trash', danger: true, onSelect: () => setEdit('delete') },
+    ]} />}
+    {edit === 'rename' && <FolderNameModal folder={f} onClose={() => setEdit('')} onDone={() => setEdit('')} />}
+    {edit === 'delete' && <DeleteFolder folder={f} onClose={() => setEdit('')} onDone={() => { if (location.pathname === `/folder/${f.id}`) navigate('/memos') }} />}
+  </>)
 }

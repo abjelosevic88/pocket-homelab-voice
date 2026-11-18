@@ -40,6 +40,7 @@ function App() {
         <Route path="/starred" element={<Memos view="starred" key="starred" />} />
         <Route path="/kind/:kind" element={<Memos view="kind" />} />
         <Route path="/tag/:tag" element={<Memos view="tag" />} />
+        <Route path="/folder/:folder" element={<Memos view="folder" />} />
         <Route path="/dictation" element={<Dictation />} />
         <Route path="/dictionary" element={<Dictionary />} />
         <Route path="/people" element={<People />} />

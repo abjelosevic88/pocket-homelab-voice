@@ -615,3 +615,11 @@ button.spk:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c, var(-
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg); }
 .tag-suggest li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 13.5px; }
 .tag-suggest li.on { background: var(--surface-2); }
+
+/* folders */
+button.sb-list.sb-new { width: calc(100% - 12px); }
+.pill.folder-pill { color: var(--text-2); }
+.folder-head-actions { display: flex; gap: 4px; }
+.meta-line .folder-link { display: inline-flex; align-items: center; gap: 3px; color: var(--text-2); }
+.meta-line .folder-link:hover { color: var(--accent-ink); }
+.page-title.folder-title { display: flex; align-items: center; gap: 8px; }

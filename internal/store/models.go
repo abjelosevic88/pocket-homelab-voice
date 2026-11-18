@@ -155,8 +155,9 @@ type Memo struct {
 	Tags        string    `json:"tags"`
 	Starred     bool      `json:"starred"`
 	Filed       bool      `json:"filed"`
-	Meeting     bool      `json:"meeting"` // a stereo call recording: you on the left, the others on the right
-	Source      string    `json:"source"`  // "" recorded here | upload | import | <app slug>
+	FolderID    int64     `json:"folder_id"` // the person's folder it is in (0 = none)
+	Meeting     bool      `json:"meeting"`   // a stereo call recording: you on the left, the others on the right
+	Source      string    `json:"source"`    // "" recorded here | upload | import | <app slug>
 	SourceRef   string    `json:"source_ref"`
 	AudioGoneAt string    `json:"audio_gone_at"` // the recording was let go (Settings → keep recordings)
 	AudioAt     string    `json:"-"`             // where it is kept: "" this box, else a place key

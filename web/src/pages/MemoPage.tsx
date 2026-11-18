@@ -1,10 +1,12 @@
 // One memo: the recording, the words that follow along as it plays, the
 // tidy version, what the AI found in it and where it went.
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
-import { announceChange } from '../lib/data'
+import { announceChange, useData } from '../lib/data'
+import { createFolder, folderItems } from '../lib/folders'
+import { FolderNameModal } from '../components/Folders'
 import type { Action, Memo, Segment } from '../lib/types'
 import { hasSpeakers, inRange, length, parsePart, partParam, partText, speakerSpans, voices, within, type Range, type Voice, type Who } from '../lib/part'
 import { WhoCard } from '../components/Speakers'
@@ -29,6 +31,8 @@ export default function MemoPage() {
   const [send, setSend] = useState<{ t: Target; action?: number } | null>(null)
   const [del, setDel] = useState(false)
   const [again, setAgain] = useState(false)
+  const [newFolder, setNewFolder] = useState(false)
+  const { folders } = useData()
   const [editing, setEditing] = useState<'' | 'title' | 'words' | 'tidy'>('')
   const player = useRef<PlayerHandle>(null)
   const [sp, setSp] = useSearchParams()
@@ -99,7 +103,10 @@ export default function MemoPage() {
     try { setM(await api.post<Memo>(`${V1}/memos/${m.id}/actions/${i}`, { skipped })) } catch (e) { toast((e as Error).message, 'err') }
   }
   const words = m.tidy || m.transcript
+  const folder = m.folder_id ? folders.find(f => f.id === m.folder_id) : undefined
+  const toFolder = (id: number, name: string) => save({ folder_id: id }, id ? `Moved to ${name}` : 'Taken out of the folder')
   const menu = (): MenuItem[] => [
+    { label: folder ? `Move from ${folder.name}` : 'Move to folder', icon: 'folder', submenu: folderItems(m.folder_id, folders, toFolder, () => setNewFolder(true)) },
     { label: m.filed ? 'Back to the inbox' : 'Done: out of the inbox', icon: m.filed ? 'inbox' : 'check', onSelect: () => save({ filed: !m.filed }, m.filed ? 'Back in the inbox' : 'Out of the inbox') },
     { label: 'Copy the words', icon: 'copy', disabled: !words, onSelect: async () => toast(await copyText(words) ? 'Copied' : 'Could not copy', 'ok') },
     { label: 'Download the recording', icon: 'download', disabled: !m.has_audio, onSelect: () => { window.location.href = `${m.audio_url}?download=1` } },
@@ -126,6 +133,7 @@ export default function MemoPage() {
             <span>{fmtDate(localDay(m.recorded_at))} · {fmtISOTime(m.recorded_at)}</span>
             <span>· {clock(m.duration_ms)}</span>
             {m.language && <span>· {langName(m.language)}</span>}
+            {folder && <span>· in <Link to={`/folder/${folder.id}`} className="folder-link"><Icon name="folder" size={12} />{folder.name}</Link></span>}
             {m.source && m.source !== 'upload' && m.source !== 'import' && <span>· from {APPS[m.source]?.name || `Pocket ${m.source[0].toUpperCase()}${m.source.slice(1)}`}</span>}
           </p>
         </div>
@@ -183,6 +191,7 @@ export default function MemoPage() {
       </section>
 
       <MemoFacts memo={m} onSave={save} />
+      {newFolder && <FolderNameModal onClose={() => setNewFolder(false)} hint={`“${m.title || 'This memo'}” goes in it.`} onDone={f => { setNewFolder(false); toFolder(f.id, f.name) }} />}
 
       {send && <SendModal memo={m} target={send.t} action={send.action} onClose={() => setSend(null)} onSent={x => { setM(x); setSend(null); announceChange() }} />}
       {del && <Confirm title="Delete this memo?" message="The recording and its words are deleted. What you sent to other apps stays there." confirmLabel="Delete" onCancel={() => setDel(false)}
@@ -444,6 +453,7 @@ function Suggestions({ memo: m, onSend, onSkip }: { memo: Memo; onSend: (t: Targ
 }
 
 function MemoFacts({ memo: m, onSave }: { memo: Memo; onSave: (p: Partial<Memo>) => void }) {
+  const { folders } = useData()
   const [tags, setTags] = useState(m.tags)
   useEffect(() => setTags(m.tags), [m.tags])
   return (
@@ -451,6 +461,10 @@ function MemoFacts({ memo: m, onSave }: { memo: Memo; onSave: (p: Partial<Memo>)
       <div className="card-body facts">
         <label className="fact-row"><span className="muted small">About</span>
           <Select ariaLabel="What it is about" value={m.kind} onChange={v => onSave({ kind: v as Memo['kind'] })} options={KINDS.map(k => ({ value: k.id, label: k.label }))} placeholder="Not set" clearLabel="Not set" /></label>
+        <label className="fact-row"><span className="muted small">Folder</span>
+          <Select ariaLabel="Folder" value={m.folder_id ? String(m.folder_id) : ''} onChange={v => onSave({ folder_id: Number(v) || 0 })}
+            options={folders.map(f => ({ value: String(f.id), label: f.name }))} placeholder="In no folder" clearLabel="In no folder"
+            onCreate={async name => { const f = await createFolder(name); announceChange(); return String(f.id) }} createLabel="New folder" /></label>
         <div className="fact-row"><span className="muted small">Tags</span>
           <TagInput value={tags} onChange={t => { setTags(t); if (t !== m.tags) onSave({ tags: t }) }} placeholder="work, family" /></div>
         <p className="muted small">{m.engine && m.engine !== 'typed' ? `Written out by ${m.engine.replace(/^whisper /, 'whisper.cpp (').replace(/^api /, 'the API (')}${m.engine.startsWith('whisper') || m.engine.startsWith('api') ? ')' : ''}` : m.engine === 'typed' ? 'Typed' : ''}

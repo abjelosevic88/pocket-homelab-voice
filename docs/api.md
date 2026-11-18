@@ -6,10 +6,10 @@ Everything the UI does goes through `/api/v1`, JSON in and out. Sign in with the
 
 | Call | What |
 |---|---|
-| `GET /memos?q&kind&tag&inbox=1&starred=1&status&from&to&limit&offset&oldest=1` | `{items, total, counts: {all, inbox, starred, working, failed, minutes}}`, newest first. `q` searches title and words, accents and alphabet ignored; `from`/`to` are local days |
-| `POST /memos` | multipart: `file` (any recording), optional `title`, `kind`, `tags`, `recorded_at` (RFC 3339), `duration_ms`, `language`, `from` (`upload`), `meeting=1` (see Meetings) — queued to be written out. Or JSON `{text, title, kind, tags, recorded_at}` for a typed memo. From a linked app also `source_ref` (sending the same one twice returns the first) |
-| `GET /memos/{id}` | The memo: `status` (queued, working, done, failed) with `progress` `{stage, pct}` and `queue` while it waits, `transcript`, `segments` `[{s, e, t}]` (ms), `tidy`, `summary`, `kind`, `tags`, `actions`, `sent`, `audio_url` |
-| `PUT /memos/{id}` | Any of `title`, `transcript`, `tidy`, `summary`, `kind`, `tags`, `starred`, `filed`, `recorded_at` |
+| `GET /memos?q&kind&tag&folder&inbox=1&starred=1&status&from&to&limit&offset&oldest=1` | `{items, total, counts: {all, inbox, starred, working, failed, minutes}}`, newest first. `q` searches title and words, accents and alphabet ignored; `from`/`to` are local days; `folder` is a folder id or `none` |
+| `POST /memos` | multipart: `file` (any recording), optional `title`, `kind`, `tags`, `recorded_at` (RFC 3339), `duration_ms`, `language`, `from` (`upload`), `folder_id`, `meeting=1` (see Meetings) — queued to be written out. Or JSON `{text, title, kind, tags, recorded_at, folder_id}` for a typed memo. From a linked app also `source_ref` (sending the same one twice returns the first) |
+| `GET /memos/{id}` | The memo: `status` (queued, working, done, failed) with `progress` `{stage, pct}` and `queue` while it waits, `transcript`, `segments` `[{s, e, t}]` (ms), `tidy`, `summary`, `kind`, `tags`, `folder_id` (0 = none), `actions`, `sent`, `audio_url` |
+| `PUT /memos/{id}` | Any of `title`, `transcript`, `tidy`, `summary`, `kind`, `tags`, `starred`, `filed`, `recorded_at`, `folder_id` (0 = take it out of its folder) |
 | `DELETE /memos/{id}` | The memo and its recording; what was sent to other apps stays there |
 | `GET /memos/{id}/audio` | The recording (range requests work); `?download=1` to save it |
 | `POST /memos/{id}/retry {language}` | Write it out again |
@@ -17,6 +17,18 @@ Everything the UI does goes through `/api/v1`, JSON in and out. Sign in with the
 | `POST /memos/{id}/part` | `{from,to}` in ms: sum up that part with AI (only its words go to the AI; nothing is saved) → `{title,summary,points}` |
 | `POST /memos/{id}/actions/{i} {skipped}` | Skip a suggestion, or bring it back |
 | `POST /memos/{id}/send` | `{to: note\|daily\|task\|event\|expense, action, title, text, folder, due, notes, list_id, start, end, location, calendar_id, amount, currency, date, account_id}` → `{sent, memo}`; `action` marks that suggestion as sent |
+
+### Folders
+
+The person's own containers for memos and meetings; a memo is in at most one.
+
+| Call | What |
+|---|---|
+| `GET /folders` | `[{id, name, count, inbox, last_at}]` by name |
+| `POST /folders {name}` | A new folder (201); a name already there (any case) answers that folder (200) |
+| `GET /folders/{id}`, `PUT /folders/{id} {name}` | One folder; rename it (409 when the name is taken) |
+| `DELETE /folders/{id}` | Removes the folder; its memos stay, in no folder |
+| `POST /memos/folder {ids, folder_id}` | Moves up to 500 memos at once (`folder_id` 0 = out of their folder) → `{moved}` |
 
 `actions` are what the AI found: `{type: task, title, due, notes}`, `{type: event, title, start, end, location}` (`start` is `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM`), `{type: journal, text}`, `{type: expense, title, amount, currency, date}` (amount in major units); once sent they carry `sent_to`, `sent_ref`, `sent_url`.
 
@@ -97,7 +109,7 @@ Styles: `natural` (punctuation, capitals, fillers out — what polishing always 
 
 ## Links (Pocket Core)
 
-Voice offers `voice:read` (memos, a memo and its recording, summary, day, search, tags, kinds, the dictation history: `GET /dictations`, `GET /dictations/stats`; the dictionary and styles: `GET /dictionary`, `GET /dictation/styles`), `voice:write` (`POST /memos`, and `PUT/DELETE` of the memos that app added) and `voice:transcribe` (`POST /transcribe`, `POST /polish`, `POST /rewrite`, `GET /speech`, and `POST /dictations` to add what was dictated to the history). Everything else answers 403 to a link token, including every change to the dictionary and the styles, and reading or deleting the dictation history.
+Voice offers `voice:read` (memos, a memo and its recording, summary, day, search, tags, folders, kinds, the dictation history: `GET /dictations`, `GET /dictations/stats`; the dictionary and styles: `GET /dictionary`, `GET /dictation/styles`), `voice:write` (`POST /memos`, and `PUT/DELETE` of the memos that app added) and `voice:transcribe` (`POST /transcribe`, `POST /polish`, `POST /rewrite`, `GET /speech`, and `POST /dictations` to add what was dictated to the history). Everything else answers 403 to a link token, including every change to the dictionary and the styles, and reading or deleting the dictation history.
 
 It uses Pocket Notes (`notes:write`, `notes:read`), Pocket Tasks (`tasks:write`, `tasks:read`), Pocket Calendar (`calendar:write`, `calendar:read`), Pocket Money (`transactions:write`, `accounts:read`) and Pocket AI inference. Events, each with `user_email` and subject `memo:<id>`: `voice.memo_recorded`, `voice.memo_transcribed` (also `text`, `engine`, `language`) and `voice.memo_filed` (`app`, `kind`, `ref`, `item_title`, `item_url`).
 

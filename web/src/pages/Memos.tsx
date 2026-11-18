@@ -1,21 +1,23 @@
 // The lists of memos: the inbox (not dealt with yet), all of them, starred,
-// one kind or one tag — grouped by day, newest first, with search.
+// one kind, one tag or one folder — grouped by day, newest first, with search.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
-import { announceChange, useOnChange } from '../lib/data'
+import { announceChange, useData, useOnChange } from '../lib/data'
+import { folderItems, moveToFolder, useFolderHere } from '../lib/folders'
+import { DeleteFolder, FolderNameModal } from '../components/Folders'
 import type { Dictation, DictationPage, Memo, MemoPage } from '../lib/types'
 import { fmtDate, fmtISOTime, todayISO, addDays } from '../lib/format'
 import { APPS, KINDS, clock, kindIcon, kindOf, localDay, openSuggestions, preview, statusLine } from '../lib/voice'
 import { useCrumb, openCreate } from '../components/Layout'
 import { Icon } from '../components/icons'
-import { Confirm, ContextMenu, Empty, Loading, copyText, useContextMenu, useDebounce, useIsMobile, useToast, type MenuItem } from '../components/ui'
+import { Confirm, ContextMenu, Empty, Loading, MenuButton, copyText, useContextMenu, useDebounce, useIsMobile, useToast, type MenuItem } from '../components/ui'
 import { SendModal, TARGETS, useCanSend, type Target } from '../components/Send'
 import { deleteDictation, dictationFrom, dictationMenu } from '../lib/dictation'
 
-export type View = 'inbox' | 'all' | 'starred' | 'kind' | 'tag'
+export type View = 'inbox' | 'all' | 'starred' | 'kind' | 'tag' | 'folder'
 
-const TITLES: Record<View, string> = { inbox: 'Inbox', all: 'All memos', starred: 'Starred', kind: '', tag: '' }
+const TITLES: Record<View, string> = { inbox: 'Inbox', all: 'All memos', starred: 'Starred', kind: '', tag: '', folder: '' }
 
 export function dayLabel(day: string): string {
   const t = todayISO()
@@ -25,7 +27,13 @@ export function dayLabel(day: string): string {
 }
 
 export default function Memos({ view }: { view: View }) {
-  const { kind = '', tag = '' } = useParams()
+  const { kind = '', tag = '', folder: folderParam = '' } = useParams()
+  const folderId = view === 'folder' ? Number(folderParam) || 0 : 0
+  const { folders } = useData()
+  const folder = folders.find(f => f.id === folderId)
+  const [editFolder, setEditFolder] = useState<'' | 'rename' | 'delete'>('')
+  const navigate = useNavigate()
+  useFolderHere(folderId)
   const [sp, setSp] = useSearchParams()
   const q = sp.get('q') || ''
   // All memos also lists what was dictated on the Mac, or only that (?type=dictations)
@@ -38,7 +46,7 @@ export default function Memos({ view }: { view: View }) {
   const [page, setPage] = useState<MemoPage | null>(null)
   const [limit, setLimit] = useState(60)
   const [err, setErr] = useState('')
-  const title = onlyDicts ? 'Dictations' : view === 'kind' ? kindOf(kind)?.plural || kind : view === 'tag' ? `#${tag}` : TITLES[view]
+  const title = onlyDicts ? 'Dictations' : view === 'folder' ? folder?.name || 'Folder' : view === 'kind' ? kindOf(kind)?.plural || kind : view === 'tag' ? `#${tag}` : TITLES[view]
   useCrumb(undefined)
 
   const url = useMemo(() => {
@@ -47,9 +55,10 @@ export default function Memos({ view }: { view: View }) {
     if (view === 'starred') p.set('starred', '1')
     if (view === 'kind') p.set('kind', kind)
     if (view === 'tag') p.set('tag', tag)
+    if (view === 'folder') p.set('folder', String(folderId || -1))
     if (q) p.set('q', q)
     return `${V1}/memos?${p}`
-  }, [view, kind, tag, q, limit])
+  }, [view, kind, tag, folderId, q, limit])
 
   const load = () => api.get<MemoPage>(url).then(r => { setPage(r); setErr('') }).catch(e => setErr((e as Error).message))
   useEffect(() => { setPage(null); load() }, [url]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -116,9 +125,17 @@ export default function Memos({ view }: { view: View }) {
     <div className="stack loose">
       <div className="page-head">
         <div className="grow">
-          <h1 className="page-title">{title}{onlyDicts ? dicts && <span className="count muted">{dicts.total}</span> : page && <span className="count muted">{page.total}</span>}</h1>
+          <h1 className={`page-title ${view === 'folder' ? 'folder-title' : ''}`}>{view === 'folder' && <Icon name="folder" size={22} className="muted" />}{title}{onlyDicts ? dicts && <span className="count muted">{dicts.total}</span> : page && <span className="count muted">{page.total}</span>}</h1>
           {view === 'inbox' && <p className="muted small">Memos you have not dealt with yet. Sending one somewhere, or ticking it, takes it out of here.</p>}
+          {view === 'folder' && <p className="muted small">What you record, add or type while this folder is open goes in it. {mobile ? 'To move other memos here, open one and pick this folder under Folder.' : 'To move other memos here, right-click one (Move to folder) or pick the folder on its page.'}</p>}
         </div>
+        {view === 'folder' && folder && <MenuButton label="Folder" align="right" items={[
+          { label: 'Rename…', icon: 'edit', onSelect: () => setEditFolder('rename') },
+          'sep',
+          { label: 'Remove folder', icon: 'trash', danger: true, onSelect: () => setEditFolder('delete') },
+        ]}><Icon name="more" size={17} /></MenuButton>}
+        {editFolder === 'rename' && folder && <FolderNameModal folder={folder} onClose={() => setEditFolder('')} onDone={() => setEditFolder('')} />}
+        {editFolder === 'delete' && folder && <DeleteFolder folder={folder} onClose={() => setEditFolder('')} onDone={() => navigate('/memos')} />}
         {!mobile && <div className="row">
           <button type="button" className="btn" onClick={() => openCreate('upload')}><Icon name="upload" size={15} />Add recordings</button>
           <button type="button" className="btn primary" onClick={() => openCreate('record')}><Icon name="mic" size={15} />Record</button>
@@ -126,7 +143,7 @@ export default function Memos({ view }: { view: View }) {
       </div>
       <div className="row wrap filters">
         <div className="search-in input-icon"><Icon name="search" size={15} /><input type="search" value={typed} onChange={e => setTyped(e.target.value)} placeholder="Search the words…" aria-label="Search the words" /></div>
-        {view !== 'kind' && <div className="chips scroll">
+        {view !== 'kind' && view !== 'folder' && <div className="chips scroll">
           <Link className={`chip ${onlyDicts ? 'active' : ''}`} to={onlyDicts ? `/memos${q ? `?q=${encodeURIComponent(q)}` : ''}` : `/memos?type=dictations${q ? `&q=${encodeURIComponent(q)}` : ''}`} aria-pressed={onlyDicts}><Icon name="dictation" size={13} />Dictations</Link>
           {KINDS.map(k => <Link key={k.id} className="chip" to={`/kind/${k.id}`}><Icon name={k.icon} size={13} />{k.plural}</Link>)}
         </div>}
@@ -136,12 +153,14 @@ export default function Memos({ view }: { view: View }) {
       {!ready && !err && <Loading />}
       {ready && page && shown === 0 && (q ? <Empty icon="search" title="Nothing found">{withDicts ? 'No memo or dictation has these words.' : 'No memo has these words.'}</Empty>
         : onlyDicts ? <Empty icon="dictation" title="No dictations yet">What you dictate with Pocket Launcher on your Mac or in Pocket AI shows up here.</Empty>
-        : view === 'inbox' ? <InboxEmpty all={page.counts.all} /> : <Empty icon="mic" title="No memos here" />)}
+        : view === 'inbox' ? <InboxEmpty all={page.counts.all} />
+        : view === 'folder' ? <Empty icon="folder" title={folder ? 'Nothing in this folder yet' : 'No such folder'}>{folder ? 'Record here, or move memos and meetings in: right-click one → Move to folder, or pick the folder on its page.' : 'It may have been removed.'}</Empty>
+        : <Empty icon="mic" title="No memos here" />)}
       {ready && groups.map(g => (
         <section key={g.day} className="card flush">
           <h3 className="day-h">{dayLabel(g.day)}</h3>
           <ul className="list">{g.items.map(e => 'memo' in e
-            ? <li key={'m' + e.memo.id}><MemoRow memo={e.memo} inbox={view === 'inbox'} onChanged={load} /></li>
+            ? <li key={'m' + e.memo.id}><MemoRow memo={e.memo} inbox={view === 'inbox'} inFolder={view === 'folder'} onChanged={load} /></li>
             : <li key={'d' + e.dict.id}><DictationRow d={e.dict} onDeleted={() => setDicts(x => x && { ...x, items: x.items.filter(y => y.id !== e.dict.id), total: Math.max(0, x.total - 1) })} onRestored={() => setDictReload(n => n + 1)} /></li>)}</ul>
         </section>
       ))}
@@ -207,8 +226,19 @@ function InboxEmpty({ all }: { all: number }) {
   )
 }
 
-export function MemoRow({ memo: m, inbox, onChanged }: { memo: Memo; inbox?: boolean; onChanged?: () => void }) {
+export function MemoRow({ memo: m, inbox, inFolder, onChanged }: { memo: Memo; inbox?: boolean; inFolder?: boolean; onChanged?: () => void }) {
   const navigate = useNavigate()
+  const { folders } = useData()
+  const [newFolder, setNewFolder] = useState(false)
+  const folder = m.folder_id ? folders.find(f => f.id === m.folder_id) : undefined
+  const move = async (fid: number, name: string) => {
+    const was = m.folder_id
+    try {
+      await moveToFolder([m.id], fid)
+      toast(fid ? `Moved to ${name}` : 'Taken out of the folder', 'ok', { label: 'Undo', run: async () => { await moveToFolder([m.id], was) } })
+      onChanged?.()
+    } catch (er) { toast((er as Error).message, 'err') }
+  }
   const { toast } = useToast()
   const can = useCanSend()
   const ctx = useContextMenu()
@@ -237,6 +267,7 @@ export function MemoRow({ memo: m, inbox, onChanged }: { memo: Memo; inbox?: boo
     { label: 'Copy text', icon: 'copy', disabled: !words, onSelect: async () => toast(await copyText(words) ? 'Copied' : 'Could not copy', 'ok') },
     ...(m.status === 'failed' && m.has_audio ? [{ label: 'Write out again', icon: 'refresh', onSelect: () => post('retry', 'Written out again soon') }] : []),
     ...(m.status === 'done' && m.transcript && (!m.tidy || m.ai_status === 'failed') && !busy ? [{ label: m.tidy ? 'Tidy up again' : 'Tidy up with AI', icon: 'sparkles', onSelect: () => post('tidy', 'Tidied up') }] : []),
+    { label: folder ? `Move from ${folder.name}` : 'Move to folder', icon: 'folder', submenu: folderItems(m.folder_id, folders, move, () => setNewFolder(true)) },
     { label: 'Change kind', icon: kindIcon(m.kind), submenu: KINDS.map(k => ({ label: k.label, checked: m.kind === k.id, onSelect: () => put({ kind: m.kind === k.id ? '' : k.id }, m.kind === k.id ? 'Kind cleared' : `Now: ${k.label}`) })) },
     'sep',
     { label: 'Delete', icon: 'trash', danger: true, onSelect: () => setDel(true) },
@@ -249,7 +280,8 @@ export function MemoRow({ memo: m, inbox, onChanged }: { memo: Memo; inbox?: boo
           <span className="row-title"><span className="ellipsis">{m.title || 'Memo'}</span>{m.starred && <Icon name="star" size={13} className="star-on" />}</span>
           {status ? <span className={`small ${m.status === 'failed' ? 'bad' : 'muted'} ellipsis`}>{status}</span>
             : <span className="muted small ellipsis">{preview(m) || <i>Nothing was said</i>}</span>}
-          {(m.sent.length > 0 || sugg > 0) && <span className="row-tags">
+          {(m.sent.length > 0 || sugg > 0 || (folder && !inFolder)) && <span className="row-tags">
+            {folder && !inFolder && <span className="pill folder-pill"><Icon name="folder" size={11} />{folder.name}</span>}
             {sugg > 0 && <span className="pill accent"><Icon name="sparkles" size={11} />{sugg} {sugg === 1 ? 'suggestion' : 'suggestions'}</span>}
             {Array.from(new Set(m.sent.map(s => s.app))).map(a => <span key={a} className="pill"><Icon name={APPS[a]?.icon || 'send'} size={11} />{APPS[a]?.name.replace('Pocket ', '') || a}</span>)}
           </span>}
@@ -261,6 +293,7 @@ export function MemoRow({ memo: m, inbox, onChanged }: { memo: Memo; inbox?: boo
         {inbox && <button type="button" className="btn ghost icon-only sm file-btn" onClick={file} aria-label="Done: out of the inbox" title="Done: out of the inbox"><Icon name="check" size={16} /></button>}
       </a>
       {ctx.at && <ContextMenu at={ctx.at} items={menu()} onClose={ctx.close} />}
+      {newFolder && <FolderNameModal onClose={() => setNewFolder(false)} hint={`“${m.title || 'This memo'}” goes in it.`} onDone={f => { setNewFolder(false); move(f.id, f.name) }} />}
       {send && <SendModal memo={m} target={send} onClose={() => setSend(null)} onSent={() => { setSend(null); changed() }} />}
       {del && <Confirm title="Delete this memo?" message="The recording and its words are deleted. What you sent to other apps stays there." confirmLabel="Delete" onCancel={() => setDel(false)}
         onConfirm={async () => { setDel(false); try { await api.del(`${V1}/memos/${m.id}`); toast('Deleted'); changed() } catch (er) { toast((er as Error).message, 'err') } }} />}

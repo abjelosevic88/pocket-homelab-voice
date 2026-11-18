@@ -50,10 +50,13 @@ export interface Memo {
   id: number; title: string; title_set: boolean; recorded_at: string; duration_ms: number; audio_type: string; audio_bytes: number; has_audio: boolean
   peaks: number[]; language: string; status: MemoStatus; error: string; transcript: string; segments: Segment[]; edited: boolean; engine: string
   summary: string; tidy: string; kind: Kind | ''; kind_set: boolean; actions: Action[]; ai_status: '' | 'working' | 'done' | 'failed'; ai_error: string; ai_provider: string
-  tags: string; starred: boolean; filed: boolean; meeting: boolean; source: string; source_ref: string; audio_gone_at: string; created_at: string; updated_at: string
+  tags: string; starred: boolean; filed: boolean; folder_id: number; meeting: boolean; source: string; source_ref: string; audio_gone_at: string; created_at: string; updated_at: string
   speakers: Speaker[]; speakers_status: '' | 'working' | 'done' | 'failed'; speakers_error: string
   sent: Sent[]; url: string; audio_url: string; progress?: Progress; queue?: number
 }
+
+/** One of the person's folders for memos and meetings, with how many are in it. */
+export interface Folder { id: number; name: string; count: number; inbox: number; last_at: string; created_at: string; updated_at: string }
 
 export interface Counts { all: number; inbox: number; starred: number; working: number; failed: number; minutes: number }
 export interface MemoPage { items: Memo[]; total: number; counts: Counts }

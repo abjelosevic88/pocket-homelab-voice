@@ -1,6 +1,8 @@
 // Stroke icons (24-grid, 1.75 stroke) drawn inline — no icon dependency.
 const P: Record<string, string> = {
   plus: 'M12 5v14M5 12h14',
+  folder: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+  'folder-plus': 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM12 10v6M9 13h6',
   mic: 'M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v3',
   dictation: 'M7 3a2 2 0 0 0-2 2v4a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zM3 9a4 4 0 0 0 8 0M7 13v2M14 5h7M14 9h7M14 13h4M3 19h18',
   dictionary: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14zM4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5M9.5 13l2.5-6 2.5 6M10.3 11h3.4',

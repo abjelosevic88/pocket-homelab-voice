@@ -64,6 +64,17 @@ func memoFilter(r *http.Request) store.MemoFilter {
 	q := r.URL.Query()
 	f := store.MemoFilter{Q: q.Get("q"), Kind: q.Get("kind"), Tag: q.Get("tag"), Inbox: queryBool(r, "inbox"), Starred: queryBool(r, "starred"),
 		Status: q.Get("status"), From: q.Get("from"), To: q.Get("to"), Limit: queryInt(r, "limit"), Offset: queryInt(r, "offset"), Oldest: queryBool(r, "oldest")}
+	switch v := q.Get("folder"); v {
+	case "", "0":
+	case "none":
+		f.Folder = -1
+	default:
+		if id, err := strconv.ParseInt(v, 10, 64); err == nil && id > 0 {
+			f.Folder = id
+		} else {
+			f.Folder = -2 // no such folder: nothing matches
+		}
+	}
 	if f.Limit <= 0 || f.Limit > 500 {
 		f.Limit = 100
 	}
@@ -137,6 +148,7 @@ func (s *Server) handleCreateMemo(w http.ResponseWriter, r *http.Request) {
 	uid := actorID(ctx)
 	app := linkApp(ctx)
 	m := &store.Memo{Status: store.StatusQueued}
+	folder := "" // the folder it goes in, when recorded from inside one
 	ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if ct == "application/json" {
 		var in struct {
@@ -147,6 +159,7 @@ func (s *Server) handleCreateMemo(w http.ResponseWriter, r *http.Request) {
 			RecordedAt string `json:"recorded_at"`
 			Language   string `json:"language"`
 			SourceRef  string `json:"source_ref"`
+			FolderID   int64  `json:"folder_id"`
 		}
 		if err := decode(r, &in); err != nil {
 			writeErr(w, http.StatusBadRequest, "invalid json")
@@ -163,6 +176,9 @@ func (s *Server) handleCreateMemo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		m.SourceRef = strings.TrimSpace(in.SourceRef)
+		if in.FolderID > 0 {
+			folder = strconv.FormatInt(in.FolderID, 10)
+		}
 	} else {
 		r.Body = http.MaxBytesReader(w, r.Body, s.cfg.MaxAudioBytes)
 		if err := r.ParseMultipartForm(32 << 20); err != nil {
@@ -193,6 +209,7 @@ func (s *Server) handleCreateMemo(w http.ResponseWriter, r *http.Request) {
 			m.DurationMS = d
 		}
 		m.SourceRef = strings.TrimSpace(fv("source_ref"))
+		folder = fv("folder_id")
 		if app == "" && oneOf(fv("from"), []string{"upload", "import"}) {
 			m.Source = fv("from")
 			if m.Title == "" {
@@ -238,6 +255,14 @@ func (s *Server) handleCreateMemo(w http.ResponseWriter, r *http.Request) {
 	}
 	if m.Status == store.StatusDone && m.Title == "" {
 		m.Title = firstWords(m.Transcript, 7)
+	}
+	if fid, ok := s.folderParam(ctx, w, uid, folder); !ok {
+		if m.Audio != "" {
+			_ = os.Remove(s.audioPath(uid, m.Audio))
+		}
+		return
+	} else {
+		m.FolderID = fid
 	}
 	if err := s.store.CreateMemo(ctx, uid, m); err != nil {
 		if m.Audio != "" {
@@ -338,6 +363,7 @@ func (s *Server) handleUpdateMemo(w http.ResponseWriter, r *http.Request) {
 		Starred    bool   `json:"starred"`
 		Filed      bool   `json:"filed"`
 		RecordedAt string `json:"recorded_at"`
+		FolderID   int64  `json:"folder_id"`
 	}
 	keys, err := decodeKeys(r, &in)
 	if err != nil {
@@ -385,9 +411,24 @@ func (s *Server) handleUpdateMemo(w http.ResponseWriter, r *http.Request) {
 		}
 		m.RecordedAt = t.UTC().Format(time.RFC3339Nano)
 	}
+	folder := m.FolderID
+	if keys["folder_id"] {
+		fid, ok := s.folderParam(ctx, w, uid, strconv.FormatInt(in.FolderID, 10))
+		if !ok {
+			return
+		}
+		folder = fid
+	}
 	if err := s.store.SaveMemo(ctx, uid, m); err != nil {
 		s.fail(w, err, "save memo")
 		return
+	}
+	if folder != m.FolderID {
+		if _, err := s.store.MoveToFolder(ctx, uid, folder, []int64{m.ID}); err != nil {
+			s.fail(w, err, "move memo")
+			return
+		}
+		m.FolderID = folder
 	}
 	writeJSON(w, http.StatusOK, s.memoOut(ctx, m))
 }

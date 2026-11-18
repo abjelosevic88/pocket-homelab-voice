@@ -81,6 +81,12 @@ func (s *Server) Router() http.Handler {
 				r.Get("/day/{date}", s.handleDay)
 				r.Get("/search", s.handleSearch)
 				r.Get("/tags", s.handleTags)
+				r.Get("/folders", s.handleListFolders)
+				r.Post("/folders", s.handleCreateFolder)
+				r.Get("/folders/{id}", s.handleGetFolder)
+				r.Put("/folders/{id}", s.handleRenameFolder)
+				r.Delete("/folders/{id}", s.handleDeleteFolder)
+				r.Post("/memos/folder", s.handleMoveMemos)
 				r.Get("/kinds", s.handleKinds)
 
 				// dictation history (Pocket Launcher on the Mac)

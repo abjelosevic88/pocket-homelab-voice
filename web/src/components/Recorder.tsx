@@ -7,6 +7,7 @@ import type { Memo } from '../lib/types'
 import { clock } from '../lib/voice'
 import { Icon } from './icons'
 import { Confirm, Modal } from './ui'
+import { folderHere } from '../lib/folders'
 
 type Phase = 'starting' | 'recording' | 'paused' | 'sending' | 'failed' | 'denied'
 
@@ -29,6 +30,7 @@ export function sendMemo(file: Blob, name: string, fields: Record<string, string
   return new Promise((resolve, reject) => {
     const fd = new FormData()
     for (const [k, v] of Object.entries(fields)) fd.append(k, v)
+    if (!('folder_id' in fields) && folderHere()) fd.append('folder_id', String(folderHere()))
     fd.append('file', file, name)
     const x = new XMLHttpRequest()
     x.open('POST', `${V1}/memos`)
