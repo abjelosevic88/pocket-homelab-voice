@@ -111,6 +111,8 @@ Styles: `natural` (punctuation, capitals, fillers out — what polishing always 
 
 Voice offers `voice:read` (memos, a memo and its recording, summary, day, search, tags, folders, kinds, the dictation history: `GET /dictations`, `GET /dictations/stats`; the dictionary and styles: `GET /dictionary`, `GET /dictation/styles`), `voice:write` (`POST /memos`, and `PUT/DELETE` of the memos that app added) and `voice:transcribe` (`POST /transcribe`, `POST /polish`, `POST /rewrite`, `GET /speech`, and `POST /dictations` to add what was dictated to the history). Everything else answers 403 to a link token, including every change to the dictionary and the styles, and reading or deleting the dictation history.
 
+Pocket Move can copy your memos out and bring them in: `move:export` reads `GET /export.json` (`kind: pocket`) and `GET /export.zip` (the recordings with their words), `move:import` posts a Pocket Voice export to `POST /import` (adds, never deletes; a second run adds nothing). `GET /pocket/portable` describes both.
+
 It uses Pocket Notes (`notes:write`, `notes:read`), Pocket Tasks (`tasks:write`, `tasks:read`), Pocket Calendar (`calendar:write`, `calendar:read`), Pocket Money (`transactions:write`, `accounts:read`) and Pocket AI inference. Events, each with `user_email` and subject `memo:<id>`: `voice.memo_recorded`, `voice.memo_transcribed` (also `text`, `engine`, `language`) and `voice.memo_filed` (`app`, `kind`, `ref`, `item_title`, `item_url`).
 
 ## The rest

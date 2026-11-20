@@ -22,6 +22,18 @@ var linkOffers = []core.Offer{
 	{Scope: "voice:transcribe", Name: "Write out speech on this server", Description: "Send a short recording and get its words back, written out by whisper on this server with your language and words settings, so dictation in other apps never leaves the box. It may also have dictated text tidied up (filler words out, punctuation, in the style for the app) or rewritten by a spoken instruction by your AI. The recording is not kept; the words of a dictation may be added to your dictation history, where you see each one with where it was made."},
 }
 
+// portable is what Pocket Move may copy out and bring in for a person
+// (docs/move.md in pocket-homelab-core); Register adds move:export/import.
+var portable = &core.Portable{
+	Exports: []core.PortableExport{
+		{Path: "/api/v1/export.json", File: "voice.json", Kind: core.KindPocket, Title: "Your memos with their words, tidy versions and summaries, folders, dictation history and dictionary (no recordings)"},
+		{Path: "/api/v1/export.zip", File: "voice-recordings.zip", Kind: core.KindZip, Title: "Every recording with its words as a text file, a folder per day"},
+	},
+	Imports: []core.PortableImport{
+		{Path: "/api/v1/import", Kind: core.KindPocket, ContentType: "application/json", Title: "Adds the memos (their words), folders, dictations and dictionary from another box; what you already have is left alone"},
+	},
+}
+
 type linkRoute struct {
 	methods string
 	path    *regexp.Regexp
@@ -44,6 +56,9 @@ var errLinkScope = errors.New("outside the link's scope")
 
 // linkAllows reports whether a link token with these scopes may make this request.
 func linkAllows(scopes []string, r *http.Request) bool {
+	if portable.LinkAllows(scopes, r) {
+		return true
+	}
 	for _, lr := range linkRoutes {
 		if !strings.Contains(" "+lr.methods+" ", " "+r.Method+" ") || !lr.path.MatchString(r.URL.Path) {
 			continue
