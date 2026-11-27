@@ -164,6 +164,8 @@ type MemoFilter struct {
 	Status  string
 	From    string // local day YYYY-MM-DD
 	To      string
+	Since   time.Time // recorded at or after this moment (zero = any)
+	Until   time.Time // recorded before this moment (zero = any)
 	Source  string
 	Folder  int64 // in this folder; -1 = in no folder, < -1 = none match
 	Limit   int
@@ -228,6 +230,14 @@ func (s *Store) ListMemos(ctx context.Context, uid int64, f MemoFilter) ([]Memo,
 	if f.To != "" {
 		where = append(where, "recorded_at < ?")
 		args = append(args, dayStart(AddDays(f.To, 1)))
+	}
+	if !f.Since.IsZero() {
+		where = append(where, "recorded_at >= ?")
+		args = append(args, f.Since.UTC().Format(time.RFC3339Nano))
+	}
+	if !f.Until.IsZero() {
+		where = append(where, "recorded_at < ?")
+		args = append(args, f.Until.UTC().Format(time.RFC3339Nano))
 	}
 	w := strings.Join(where, " AND ")
 	var total int

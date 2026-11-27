@@ -80,6 +80,8 @@ Set `CORE_URL` and `CORE_REGISTRATION_KEY` and Voice joins the box: people sign 
 
 Other apps can read your memos and dictation history (`voice:read`: Pocket Day writes the day's memos into your journal, Pocket AI finds "what did I say about the garden?"), add one for you (`voice:write`), or have their own dictation written out here (`voice:transcribe`: words back, the recording not kept, optionally tidied by your AI — Pocket Day, Pocket AI and Pocket Launcher's Wispr-style dictation on the Mac use it, so dictation never goes to a cloud service; Pocket AI also adds what you dictate in its composer to your dictation history, marked as from the phone app or the web page). Events on the bus: `voice.memo_recorded`, `voice.memo_transcribed` (with the words), `voice.memo_filed`. Without Core every connection can be made directly with a URL and a token; the Core-only choices stay visible, greyed out.
 
+Pocket Search, Pocket Day and Pocket Hub find Voice on their own, with nothing to set up in either: your memos, meetings and dictations turn up in Search (`!voice dentist`, also `!memo` and `!memos`), Hub shows a "Voice memos" widget with the newest memos and the ones still being written out first, and Pocket Day can read the day's memos and meetings with how much you dictated (Pocket Day keeps its own, fuller reading through `voice:read` for now). These routes only read what is stored. The routes are in [docs/api.md](docs/api.md#pocket-search-pocket-day-and-pocket-hub).
+
 ## Develop
 
 ```sh

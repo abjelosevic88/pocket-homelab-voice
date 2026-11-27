@@ -34,6 +34,18 @@ var portable = &core.Portable{
 	},
 }
 
+// capabilities are what Pocket Search, Pocket Day and Pocket Hub may ask
+// every app (docs/capabilities.md in pocket-homelab-core); Register adds the
+// pocket:search, pocket:day and pocket:widget offers. They only read what is
+// stored: nothing is written out, tidied, sent on or removed. No quick
+// capture: a memo is a recording.
+var capabilities = core.Capabilities{
+	Search: &core.Searchable{What: "Your memos and meetings by title, summary and words, and what you dictated",
+		Kinds: []string{"memo", "meeting", "dictation"}, Bangs: []string{"voice", "memo", "memos"}},
+	Day:    &core.DayFeed{Label: "Voice", One: "memo", Many: "memos", What: "The memos and meetings you recorded that day, and how much you dictated"},
+	Widget: &core.Widget{Title: "Voice memos", What: "Your newest memos and meetings, the ones still being written out first"},
+}
+
 type linkRoute struct {
 	methods string
 	path    *regexp.Regexp
@@ -56,7 +68,7 @@ var errLinkScope = errors.New("outside the link's scope")
 
 // linkAllows reports whether a link token with these scopes may make this request.
 func linkAllows(scopes []string, r *http.Request) bool {
-	if portable.LinkAllows(scopes, r) {
+	if portable.LinkAllows(scopes, r) || capabilities.LinkAllows(scopes, r) {
 		return true
 	}
 	for _, lr := range linkRoutes {

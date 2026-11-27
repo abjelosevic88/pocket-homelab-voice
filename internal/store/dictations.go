@@ -359,3 +359,11 @@ func (s *Store) DictationWordsOn(ctx context.Context, uid int64, day string) (wo
 		uid, dictDayStart(day), dictDayStart(AddDays(day, 1))).Scan(&words, &sessions)
 	return
 }
+
+// DictationsBetween is how many words uid dictated from start until end, in
+// how many dictations (a day in the caller's time zone).
+func (s *Store) DictationsBetween(ctx context.Context, uid int64, start, end time.Time) (words, sessions int64) {
+	_ = s.DB.QueryRowContext(ctx, `SELECT COALESCE(SUM(words),0), COUNT(1) FROM dictations WHERE user_id = ? AND dictated_at >= ? AND dictated_at < ?`,
+		uid, DictationTime(start), DictationTime(end)).Scan(&words, &sessions)
+	return
+}

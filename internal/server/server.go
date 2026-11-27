@@ -236,10 +236,12 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 		Description: "Voice memos you record on your phone, written out on this server (whisper.cpp; no audio leaves the box), tidied up with Pocket AI, and filed where they belong: a note or today's daily note in Pocket Notes, tasks in Pocket Tasks, an appointment in Pocket Calendar, an expense in Pocket Money. Other apps can use it to write out dictation locally.",
 		Icon:        "/favicon.svg", Version: Version,
 		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "VOICE",
-		Publishes: eventTopics,
-		Offers:    linkOffers,
-		Portable:  portable,
-		Uses:      append(linkUses(), filesUse(), core.InferenceUse()),
+		Publishes:    eventTopics,
+		Offers:       linkOffers,
+		Portable:     portable,
+		Category:     "Everyday",
+		Capabilities: capabilities,
+		Uses:         append(linkUses(), filesUse(), core.InferenceUse()),
 	}
 	if s.cfg.BaseURL != "" {
 		m.OIDC = &core.OIDCRequest{RedirectURIs: []string{s.oidcCallbackURL()}}
